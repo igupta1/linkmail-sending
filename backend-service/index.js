@@ -42,9 +42,16 @@ app.use(cors({
       'https://www.linkedin.com',
       'https://linkedin.com',
       'https://linkmail-web.vercel.app',
+      'https://linkmail-sending.vercel.app', // allow same-origin success page
+      'https://www.linkmail.dev',
       'http://localhost:3000',
       'http://localhost:3001'
     ];
+
+    // Also allow FRONTEND_URL if provided
+    if (process.env.FRONTEND_URL && !allowedOrigins.includes(process.env.FRONTEND_URL)) {
+      allowedOrigins.push(process.env.FRONTEND_URL);
+    }
     
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
