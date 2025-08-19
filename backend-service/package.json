@@ -18,7 +18,8 @@
     "bcryptjs": "^2.4.3",
     "mongoose": "^8.0.3",
     "express-rate-limit": "^7.1.5",
-    "express-validator": "^7.0.1"
+    "express-validator": "^7.0.1",
+    "@vercel/kv": "^1.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",

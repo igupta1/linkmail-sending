@@ -7,8 +7,14 @@ const { body, validationResult } = require('express-validator');
 
 const router = express.Router();
 
-// In-memory storage for user sessions (in production, use a database)
-const userSessions = new Map();
+// Storage helpers (KV in prod, memory in dev)
+const {
+  setUserSession,
+  getUserSession,
+  deleteUserSession,
+  storeExtensionToken,
+  pollExtensionToken
+} = require('../store');
 
 /**
  * Initialize Google OAuth2 client
@@ -75,7 +81,7 @@ router.get('/google/callback', async (req, res) => {
     };
 
     // Store user session
-    userSessions.set(profile.id, {
+    await setUserSession(profile.id, {
       ...userData,
       createdAt: new Date(),
       lastAccessed: new Date()
@@ -166,7 +172,7 @@ router.get('/google/callback', async (req, res) => {
  * GET /api/auth/verify
  * Verify JWT token validity
  */
-router.get('/verify', (req, res) => {
+router.get('/verify', async (req, res) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -180,14 +186,14 @@ router.get('/verify', (req, res) => {
   }
 
   // Check if user session still exists
-  const userSession = userSessions.get(decoded.id);
+  const userSession = await getUserSession(decoded.id);
   if (!userSession) {
     return res.status(401).json({ error: 'Session not found' });
   }
 
   // Update last accessed time
   userSession.lastAccessed = new Date();
-  userSessions.set(decoded.id, userSession);
+  await setUserSession(decoded.id, userSession);
 
   res.json({ 
     valid: true, 
@@ -203,7 +209,7 @@ router.get('/verify', (req, res) => {
  * POST /api/auth/logout
  * Logout user and invalidate session
  */
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -211,21 +217,20 @@ router.post('/logout', (req, res) => {
     const decoded = verifyToken(token);
     if (decoded) {
       // Remove user session
-      userSessions.delete(decoded.id);
+      await deleteUserSession(decoded.id);
     }
   }
 
   res.json({ success: true, message: 'Logged out successfully' });
 });
 
-// Store for extension tokens (temporary storage)
-const extensionTokens = new Map();
+// Extension token handoff is handled via KV-backed store
 
 /**
  * POST /api/auth/extension-token
  * Store token for extension to retrieve
  */
-router.post('/extension-token', (req, res) => {
+router.post('/extension-token', async (req, res) => {
   try {
     const { token, userData } = req.body;
     
@@ -233,20 +238,7 @@ router.post('/extension-token', (req, res) => {
       return res.status(400).json({ error: 'Token and userData required' });
     }
 
-    // Generate a temporary key for this auth session
-    const sessionKey = `ext_${Date.now()}_${Math.random().toString(36).substring(2)}`;
-    
-    // Store token with expiration (5 minutes)
-    extensionTokens.set(sessionKey, {
-      token,
-      userData,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + (5 * 60 * 1000) // 5 minutes
-    });
-
-    // Clean up expired tokens
-    cleanupExpiredTokens();
-
+    const { sessionKey } = await storeExtensionToken(token, userData);
     console.log(`Extension token stored with key: ${sessionKey}`);
     res.json({ success: true, sessionKey });
   } catch (error) {
@@ -259,32 +251,12 @@ router.post('/extension-token', (req, res) => {
  * GET /api/auth/extension-poll
  * Poll for available extension token
  */
-router.get('/extension-poll', (req, res) => {
+router.get('/extension-poll', async (req, res) => {
   try {
-    // Clean up expired tokens first
-    cleanupExpiredTokens();
-
-    // Find the most recent valid token
-    let latestToken = null;
-    let latestTime = 0;
-
-    for (const [key, tokenData] of extensionTokens.entries()) {
-      if (tokenData.createdAt > latestTime) {
-        latestTime = tokenData.createdAt;
-        latestToken = { key, ...tokenData };
-      }
-    }
-
+    const latestToken = await pollExtensionToken();
     if (latestToken) {
-      // Remove the token after retrieval (one-time use)
-      extensionTokens.delete(latestToken.key);
-      
       console.log('Extension token retrieved and removed');
-      res.json({
-        success: true,
-        token: latestToken.token,
-        userData: latestToken.userData
-      });
+      res.json({ success: true, token: latestToken.token, userData: latestToken.userData });
     } else {
       res.json({ success: false, message: 'No token available' });
     }
@@ -297,14 +269,7 @@ router.get('/extension-poll', (req, res) => {
 /**
  * Clean up expired extension tokens
  */
-function cleanupExpiredTokens() {
-  const now = Date.now();
-  for (const [key, tokenData] of extensionTokens.entries()) {
-    if (now > tokenData.expiresAt) {
-      extensionTokens.delete(key);
-    }
-  }
-}
+function cleanupExpiredTokens() { /* no-op with KV-backed store */ }
 
 /**
  * GET /api/auth/sessions
@@ -312,16 +277,7 @@ function cleanupExpiredTokens() {
  */
 if (process.env.NODE_ENV !== 'production') {
   router.get('/sessions', (req, res) => {
-    res.json({
-      totalSessions: userSessions.size,
-      sessions: Array.from(userSessions.entries()).map(([id, session]) => ({
-        id,
-        email: session.email,
-        name: session.name,
-        createdAt: session.createdAt,
-        lastAccessed: session.lastAccessed
-      }))
-    });
+    res.json({ message: 'Session listing is not available in KV mode' });
   });
   
   // Debug endpoint to test success page template
@@ -383,4 +339,4 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-module.exports = { router, userSessions };
+module.exports = { router };

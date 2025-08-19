@@ -1,7 +1,7 @@
 // User routes for LinkMail backend
 
 const express = require('express');
-const { userSessions } = require('./auth');
+const { getUserSession, setUserSession, deleteUserSession } = require('../store');
 
 const router = express.Router();
 
@@ -9,11 +9,11 @@ const router = express.Router();
  * GET /api/user/profile
  * Get user profile information
  */
-router.get('/profile', (req, res) => {
+router.get('/profile', async (req, res) => {
   const userId = req.user.id;
   
   try {
-    const userSession = userSessions.get(userId);
+    const userSession = await getUserSession(userId);
     if (!userSession) {
       return res.status(401).json({
         error: 'Session not found',
@@ -23,7 +23,7 @@ router.get('/profile', (req, res) => {
 
     // Update last accessed time
     userSession.lastAccessed = new Date();
-    userSessions.set(userId, userSession);
+    await setUserSession(userId, userSession);
 
     // Return user profile data (excluding sensitive information)
     res.json({
@@ -52,7 +52,7 @@ router.get('/profile', (req, res) => {
  * PUT /api/user/profile
  * Update user profile information (name only for now)
  */
-router.put('/profile', (req, res) => {
+router.put('/profile', async (req, res) => {
   const userId = req.user.id;
   const { name } = req.body;
 
@@ -64,7 +64,7 @@ router.put('/profile', (req, res) => {
   }
 
   try {
-    const userSession = userSessions.get(userId);
+    const userSession = await getUserSession(userId);
     if (!userSession) {
       return res.status(401).json({
         error: 'Session not found',
@@ -75,7 +75,7 @@ router.put('/profile', (req, res) => {
     // Update user name
     userSession.name = name.trim();
     userSession.lastAccessed = new Date();
-    userSessions.set(userId, userSession);
+    await setUserSession(userId, userSession);
 
     res.json({
       success: true,
@@ -101,11 +101,11 @@ router.put('/profile', (req, res) => {
  * GET /api/user/stats
  * Get user statistics
  */
-router.get('/stats', (req, res) => {
+router.get('/stats', async (req, res) => {
   const userId = req.user.id;
   
   try {
-    const userSession = userSessions.get(userId);
+    const userSession = await getUserSession(userId);
     if (!userSession) {
       return res.status(401).json({
         error: 'Session not found',
@@ -158,11 +158,11 @@ router.get('/stats', (req, res) => {
  * DELETE /api/user/account
  * Delete user account and all associated data
  */
-router.delete('/account', (req, res) => {
+router.delete('/account', async (req, res) => {
   const userId = req.user.id;
   
   try {
-    const userSession = userSessions.get(userId);
+    const userSession = await getUserSession(userId);
     if (!userSession) {
       return res.status(401).json({
         error: 'Session not found',
@@ -171,7 +171,7 @@ router.delete('/account', (req, res) => {
     }
 
     // Remove user session and all data
-    userSessions.delete(userId);
+    await deleteUserSession(userId);
 
     res.json({
       success: true,

@@ -3,7 +3,7 @@
 const express = require('express');
 const { google } = require('googleapis');
 const { body, validationResult } = require('express-validator');
-const { userSessions } = require('./auth');
+const { getUserSession, setUserSession } = require('../store');
 
 const router = express.Router();
 
@@ -12,8 +12,9 @@ const router = express.Router();
  * @param {string} userId - User ID
  * @returns {Object} Gmail client
  */
-function getGmailClient(userId) {
-  const userSession = userSessions.get(userId);
+async function getGmailClient(userId) {
+  // Retrieve session from KV/memory
+  const userSession = await getUserSession(userId);
   if (!userSession || !userSession.googleTokens) {
     throw new Error('User session not found or no Google tokens available');
   }
@@ -137,7 +138,7 @@ router.post('/send', [
 
   try {
     // Get user session
-    const userSession = userSessions.get(userId);
+    const userSession = await getUserSession(userId);
     if (!userSession) {
       return res.status(401).json({
         error: 'Session not found',
@@ -146,7 +147,7 @@ router.post('/send', [
     }
 
     // Get Gmail client
-    const gmail = getGmailClient(userId);
+    const gmail = await getGmailClient(userId);
 
     // Get user profile for the From header
     const profileResponse = await gmail.users.getProfile({ userId: 'me' });
@@ -189,7 +190,7 @@ router.post('/send', [
     };
 
     userSession.emailHistory.push(emailRecord);
-    userSessions.set(userId, userSession);
+    await setUserSession(userId, userSession);
 
     res.json({
       success: true,
