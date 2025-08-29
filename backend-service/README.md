@@ -81,6 +81,50 @@ Visit: `http://localhost:3000/api/auth/google?source=extension`
 - `GET /api/user/stats` - Get user statistics
 - `DELETE /api/user/account` - Delete user account
 
+## Database (Neon/Postgres)
+
+This service supports a Postgres database (Neon recommended). It includes a simple migration runner and initial schema for contacts.
+
+### 1) Configure environment
+
+Create `.env` in `backend-service/` using the template below:
+
+```
+DATABASE_URL=postgres://<user>:<password>@<host>:5432/<database>?sslmode=require
+PGSSLMODE=require
+
+# Existing vars required by the app
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=
+JWT_SECRET=
+FRONTEND_URL=
+KV_REST_API_URL=
+KV_REST_API_TOKEN=
+```
+
+Notes:
+- For Neon, copy the pooled connection string and set `sslmode=require` (or set `PGSSLMODE=require`).
+- SSL is auto-configured for Neon domains.
+
+### 2) Install dependencies
+
+```bash
+npm install
+```
+
+### 3) Run migrations
+
+```bash
+npm run db:migrate
+```
+
+Creates tables:
+- `contacts` (first_name, last_name, job_title, company, location, timestamps)
+- `contact_emails` (contact_id, email, is_primary)
+
+You can query with `db/index.js` exports.
+
 ## Deployment
 
 ### Vercel (Recommended)

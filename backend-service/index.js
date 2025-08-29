@@ -11,6 +11,7 @@ const { router: authRoutes } = require('./routes/auth');
 const emailRoutes = require('./routes/email');
 const userRoutes = require('./routes/user');
 const { authenticateToken } = require('./middleware/auth');
+const contactsRoutes = require('./routes/contacts');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -83,6 +84,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/email', authenticateToken, emailRoutes);
 app.use('/api/user', authenticateToken, userRoutes);
+app.use('/api/contacts', authenticateToken, contactsRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
