@@ -131,3 +131,62 @@ router.get('/facets', async (req, res) => {
 });
 
 
+/**
+ * GET /api/contacts/search
+ * Query: jobTitle, company
+ * Returns up to 3 contacts with name and linkedin url
+ */
+router.get('/search', async (req, res) => {
+  try {
+    const rawJobTitle = (req.query.jobTitle || '').toString();
+    const rawCompany = (req.query.company || '').toString();
+
+    const jobTitle = rawJobTitle.trim();
+    const company = rawCompany.trim();
+
+    if (!jobTitle || !company) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: 'Both jobTitle and company are required'
+      });
+    }
+
+    // Case-insensitive, partial match, prefer verified and those with linkedin_url
+    const sql = `
+      SELECT id,
+             first_name,
+             last_name,
+             job_title,
+             company,
+             linkedin_url
+      FROM contacts
+      WHERE job_title ILIKE $1
+        AND company ILIKE $2
+      ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
+               is_verified DESC,
+               updated_at DESC
+      LIMIT 3
+    `;
+
+    // Use wildcard matching on both sides to allow partials provided by dropdowns just in case
+    const { rows } = await query(sql, [
+      `%${jobTitle}%`,
+      `%${company}%`
+    ]);
+
+    const results = rows.map(r => ({
+      id: r.id,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      jobTitle: r.job_title,
+      company: r.company,
+      linkedinUrl: r.linkedin_url || null
+    }));
+
+    return res.json({ results });
+  } catch (err) {
+    console.error('Search contacts error:', err);
+    return res.status(500).json({ error: 'InternalError', message: 'Failed to search contacts' });
+  }
+});
+
