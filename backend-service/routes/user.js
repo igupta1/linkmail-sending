@@ -205,6 +205,7 @@ router.get('/bio', async (req, res) => {
              linkedin_url,
              experiences,
              skills,
+             templates,
              contacted_linkedins,
              created_at,
              updated_at
@@ -235,6 +236,7 @@ router.put('/bio', [
   body('linkedinUrl').optional().isString().trim(),
   body('experiences').optional().isArray(),
   body('skills').optional().isArray(),
+  body('templates').optional().isArray(),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -242,12 +244,12 @@ router.put('/bio', [
   }
 
   const userId = req.user.id;
-  const { firstName = null, lastName = null, linkedinUrl = null, experiences = [], skills = [] } = req.body;
+  const { firstName = null, lastName = null, linkedinUrl = null, experiences = [], skills = [], templates = [] } = req.body;
 
   try {
     const upsertSql = `
-      INSERT INTO user_profiles (user_id, first_name, last_name, linkedin_url, experiences, skills)
-      VALUES ($1, $2, $3, $4, $5::jsonb, $6::text[])
+      INSERT INTO user_profiles (user_id, first_name, last_name, linkedin_url, experiences, skills, templates)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6::text[], $7::jsonb)
       ON CONFLICT (user_id)
       DO UPDATE SET
         first_name = COALESCE(EXCLUDED.first_name, user_profiles.first_name),
@@ -255,8 +257,9 @@ router.put('/bio', [
         linkedin_url = COALESCE(EXCLUDED.linkedin_url, user_profiles.linkedin_url),
         experiences = COALESCE(EXCLUDED.experiences, user_profiles.experiences),
         skills = COALESCE(EXCLUDED.skills, user_profiles.skills),
+        templates = COALESCE(EXCLUDED.templates, user_profiles.templates),
         updated_at = NOW()
-      RETURNING user_id, first_name, last_name, linkedin_url, experiences, skills, contacted_linkedins, created_at, updated_at
+      RETURNING user_id, first_name, last_name, linkedin_url, experiences, skills, templates, contacted_linkedins, created_at, updated_at
     `;
     const { rows } = await query(upsertSql, [
       userId,
@@ -264,7 +267,8 @@ router.put('/bio', [
       lastName,
       linkedinUrl,
       JSON.stringify(Array.isArray(experiences) ? experiences : []),
-      Array.isArray(skills) ? skills : []
+      Array.isArray(skills) ? skills : [],
+      JSON.stringify(Array.isArray(templates) ? templates.map(t => ({ title: t.title || t.name || '', body: t.body || t.content || '' })) : [])
     ]);
     return res.json({ success: true, profile: rows[0] });
   } catch (error) {
