@@ -2,6 +2,8 @@
 
 const express = require('express');
 const { getUserSession, setUserSession, deleteUserSession } = require('../store');
+const { query } = require('../db');
+const { body, validationResult } = require('express-validator');
 
 const router = express.Router();
 
@@ -188,3 +190,118 @@ router.delete('/account', async (req, res) => {
 });
 
 module.exports = router;
+
+/**
+ * GET /api/user/bio
+ * Fetch persisted user bio/profile data from Postgres
+ */
+router.get('/bio', async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const sql = `
+      SELECT user_id,
+             first_name,
+             last_name,
+             linkedin_url,
+             experiences,
+             skills,
+             contacted_linkedins,
+             created_at,
+             updated_at
+      FROM user_profiles
+      WHERE user_id = $1
+    `;
+    const { rows } = await query(sql, [userId]);
+    if (rows.length === 0) {
+      return res.json({
+        success: true,
+        profile: null
+      });
+    }
+    return res.json({ success: true, profile: rows[0] });
+  } catch (error) {
+    console.error('Error fetching user bio:', error);
+    return res.status(500).json({ error: 'FailedToFetchBio', message: 'Could not fetch user bio' });
+  }
+});
+
+/**
+ * PUT /api/user/bio
+ * Create or update persisted user bio/profile data
+ */
+router.put('/bio', [
+  body('firstName').optional().isString().trim(),
+  body('lastName').optional().isString().trim(),
+  body('linkedinUrl').optional().isString().trim(),
+  body('experiences').optional().isArray(),
+  body('skills').optional().isArray(),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: 'ValidationFailed', details: errors.array() });
+  }
+
+  const userId = req.user.id;
+  const { firstName = null, lastName = null, linkedinUrl = null, experiences = [], skills = [] } = req.body;
+
+  try {
+    const upsertSql = `
+      INSERT INTO user_profiles (user_id, first_name, last_name, linkedin_url, experiences, skills)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6::text[])
+      ON CONFLICT (user_id)
+      DO UPDATE SET
+        first_name = COALESCE(EXCLUDED.first_name, user_profiles.first_name),
+        last_name = COALESCE(EXCLUDED.last_name, user_profiles.last_name),
+        linkedin_url = COALESCE(EXCLUDED.linkedin_url, user_profiles.linkedin_url),
+        experiences = COALESCE(EXCLUDED.experiences, user_profiles.experiences),
+        skills = COALESCE(EXCLUDED.skills, user_profiles.skills),
+        updated_at = NOW()
+      RETURNING user_id, first_name, last_name, linkedin_url, experiences, skills, contacted_linkedins, created_at, updated_at
+    `;
+    const { rows } = await query(upsertSql, [
+      userId,
+      firstName,
+      lastName,
+      linkedinUrl,
+      JSON.stringify(Array.isArray(experiences) ? experiences : []),
+      Array.isArray(skills) ? skills : []
+    ]);
+    return res.json({ success: true, profile: rows[0] });
+  } catch (error) {
+    console.error('Error upserting user bio:', error);
+    return res.status(500).json({ error: 'FailedToSaveBio', message: 'Could not save user bio' });
+  }
+});
+
+/**
+ * POST /api/user/contacted
+ * Append a contacted LinkedIn profile URL to the user's list
+ */
+router.post('/contacted', [
+  body('linkedinUrl').isString().trim().notEmpty().withMessage('linkedinUrl is required')
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: 'ValidationFailed', details: errors.array() });
+  }
+  const userId = req.user.id;
+  const { linkedinUrl } = req.body;
+  try {
+    const updateSql = `
+      INSERT INTO user_profiles (user_id, contacted_linkedins)
+      VALUES ($1, ARRAY[LOWER($2)])
+      ON CONFLICT (user_id)
+      DO UPDATE SET
+        contacted_linkedins = (
+          SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(user_profiles.contacted_linkedins, '{}') || ARRAY[LOWER(EXCLUDED.contacted_linkedins[1])]))
+        ),
+        updated_at = NOW()
+      RETURNING user_id, first_name, last_name, linkedin_url, experiences, skills, contacted_linkedins, created_at, updated_at
+    `;
+    const { rows } = await query(updateSql, [userId, linkedinUrl]);
+    return res.json({ success: true, profile: rows[0] });
+  } catch (error) {
+    console.error('Error updating contacted linkedins:', error);
+    return res.status(500).json({ error: 'FailedToUpdateContacted', message: 'Could not update contacted linkedins' });
+  }
+});
