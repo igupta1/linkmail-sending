@@ -244,7 +244,16 @@ router.put('/bio', [
   }
 
   const userId = req.user.id;
-  const { firstName = null, lastName = null, linkedinUrl = null, experiences = [], skills = [], templates = [] } = req.body;
+  const { firstName, lastName, linkedinUrl, experiences, skills, templates } = req.body;
+
+  // Treat omitted fields as null so COALESCE preserves existing values
+  const sanitizedFirstName = typeof firstName === 'string' && firstName.trim().length > 0 ? firstName.trim() : null;
+  const sanitizedLastName = typeof lastName === 'string' && lastName.trim().length > 0 ? lastName.trim() : null;
+  const sanitizedLinkedIn = typeof linkedinUrl === 'string' && linkedinUrl.trim().length > 0 ? linkedinUrl.trim() : null;
+
+  const experiencesJson = Array.isArray(experiences) ? JSON.stringify(experiences) : null;
+  const skillsArray = Array.isArray(skills) ? skills : null;
+  const templatesJson = Array.isArray(templates) ? JSON.stringify(templates.map(t => ({ title: t.title || t.name || '', body: t.body || t.content || '' }))) : null;
 
   try {
     const upsertSql = `
@@ -263,12 +272,12 @@ router.put('/bio', [
     `;
     const { rows } = await query(upsertSql, [
       userId,
-      firstName,
-      lastName,
-      linkedinUrl,
-      JSON.stringify(Array.isArray(experiences) ? experiences : []),
-      Array.isArray(skills) ? skills : [],
-      JSON.stringify(Array.isArray(templates) ? templates.map(t => ({ title: t.title || t.name || '', body: t.body || t.content || '' })) : [])
+      sanitizedFirstName,
+      sanitizedLastName,
+      sanitizedLinkedIn,
+      experiencesJson,
+      skillsArray,
+      templatesJson
     ]);
     return res.json({ success: true, profile: rows[0] });
   } catch (error) {
