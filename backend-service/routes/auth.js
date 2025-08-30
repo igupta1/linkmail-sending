@@ -4,6 +4,7 @@ const express = require('express');
 const { google } = require('googleapis');
 const { generateToken, verifyToken } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
+const { query } = require('../db');
 
 const router = express.Router();
 
@@ -86,6 +87,27 @@ router.get('/google/callback', async (req, res) => {
       createdAt: new Date(),
       lastAccessed: new Date()
     });
+
+    // Upsert minimal user profile row in Postgres (non-blocking)
+    try {
+      if (process.env.DATABASE_URL) {
+        const upsertSql = `
+          INSERT INTO user_profiles (user_id, user_email, first_name, last_name)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (user_id) DO UPDATE SET
+            user_email = COALESCE(EXCLUDED.user_email, user_profiles.user_email),
+            first_name = COALESCE(EXCLUDED.first_name, user_profiles.first_name),
+            last_name = COALESCE(EXCLUDED.last_name, user_profiles.last_name),
+            updated_at = NOW()
+        `;
+        const name = (profile.name || '').trim();
+        const first = name.split(' ')[0] || null;
+        const last = name.split(' ').slice(1).join(' ') || null;
+        await query(upsertSql, [profile.id, profile.email || null, first, last]);
+      }
+    } catch (e) {
+      console.error('Upsert minimal user profile failed (non-fatal):', e?.message || e);
+    }
 
     // Generate JWT token
     const jwtToken = generateToken(userData);
