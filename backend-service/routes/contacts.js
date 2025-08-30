@@ -402,90 +402,187 @@ router.post('/apollo-email-search', [
       return res.status(500).json({ error: 'Apollo API key not configured' });
     }
 
-    // Build Apollo search parameters
-    const searchParams = {};
+    // Clean up company name (remove duplicates)
+    const cleanCompany = company ? company.replace(/(.+)\1+/g, '$1').trim() : '';
     
-    // Add LinkedIn URL if provided
-    if (linkedinUrl) {
-      // Extract LinkedIn profile ID from URL for better matching
-      const linkedinMatch = linkedinUrl.match(/linkedin\.com\/in\/([^\/\?]+)/);
-      if (linkedinMatch) {
-        // Apollo doesn't directly search by LinkedIn URL in people search, but we can use it for validation later
-        console.log('LinkedIn profile ID:', linkedinMatch[1]);
-      }
-    }
+    // Build Apollo search parameters - try multiple strategies
+    let searchResults = null;
+    let searchStrategy = '';
 
-    // Add person name search
+    // Strategy 1: Search by name only (most likely to find matches)
     if (firstName || lastName) {
       const nameQuery = [firstName, lastName].filter(Boolean).join(' ');
-      searchParams.q_keywords = nameQuery;
-    }
+      const nameSearchParams = {
+        q_keywords: nameQuery,
+        page: 1,
+        per_page: 25 // Get more results to filter through
+      };
 
-    // Add company search if provided
-    if (company) {
-      searchParams.q_organization_domains_list = []; // We'll search by company name instead
-      // For company name search, we can use organization search or person search with company filter
-      // Let's add company to the keywords for now
-      if (searchParams.q_keywords) {
-        searchParams.q_keywords += ` ${company}`;
-      } else {
-        searchParams.q_keywords = company;
+      console.log('Apollo search strategy 1 (name only):', nameSearchParams);
+      
+      try {
+        const nameResponse = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
+          method: 'POST',
+          headers: {
+            'accept': 'application/json',
+            'Cache-Control': 'no-cache',
+            'Content-Type': 'application/json',
+            'X-Api-Key': apolloApiKey
+          },
+          body: JSON.stringify(nameSearchParams)
+        });
+
+        if (nameResponse.ok) {
+          const nameData = await nameResponse.json();
+          if (nameData.contacts && nameData.contacts.length > 0) {
+            searchResults = nameData;
+            searchStrategy = 'name_only';
+          }
+        }
+      } catch (e) {
+        console.log('Name-only search failed:', e.message);
       }
     }
 
-    // Set pagination
-    searchParams.page = 1;
-    searchParams.per_page = 10; // Limit results
+    // Strategy 2: If name search didn't work or no results, try with company
+    if (!searchResults && cleanCompany) {
+      const companySearchParams = {
+        q_keywords: cleanCompany,
+        page: 1,
+        per_page: 25
+      };
 
-    console.log('Apollo search parameters:', searchParams);
+      // Add name if available
+      if (firstName || lastName) {
+        const nameQuery = [firstName, lastName].filter(Boolean).join(' ');
+        companySearchParams.q_keywords = `${nameQuery} ${cleanCompany}`;
+      }
 
-    // Make request to Apollo API
-    const apolloResponse = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
-      method: 'POST',
-      headers: {
-        'accept': 'application/json',
-        'Cache-Control': 'no-cache',
-        'Content-Type': 'application/json',
-        'X-Api-Key': apolloApiKey
-      },
-      body: JSON.stringify(searchParams)
-    });
+      console.log('Apollo search strategy 2 (name + company):', companySearchParams);
+      
+      try {
+        const companyResponse = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
+          method: 'POST',
+          headers: {
+            'accept': 'application/json',
+            'Cache-Control': 'no-cache',
+            'Content-Type': 'application/json',
+            'X-Api-Key': apolloApiKey
+          },
+          body: JSON.stringify(companySearchParams)
+        });
 
-    if (!apolloResponse.ok) {
-      const errorText = await apolloResponse.text();
-      console.error('Apollo API error:', apolloResponse.status, errorText);
-      return res.status(500).json({ 
-        error: 'Apollo API request failed', 
-        message: `Apollo returned ${apolloResponse.status}: ${errorText}` 
-      });
-    }
-
-    const apolloData = await apolloResponse.json();
-    console.log('Apollo API response:', JSON.stringify(apolloData, null, 2));
-
-    // Process Apollo response
-    if (!apolloData.contacts || apolloData.contacts.length === 0) {
-      return res.json({
-        success: false,
-        message: 'No contacts found in Apollo database',
-        apolloResponse: apolloData
-      });
-    }
-
-    // Find the best match
-    let bestMatch = apolloData.contacts[0];
-
-    // If we have LinkedIn URL, try to find exact match
-    if (linkedinUrl && apolloData.contacts.length > 1) {
-      const linkedinUrlLower = linkedinUrl.toLowerCase();
-      const exactMatch = apolloData.contacts.find(contact => {
-        return contact.linkedin_url && 
-               contact.linkedin_url.toLowerCase().includes(linkedinUrlLower.split('/in/')[1]?.split('/')[0] || '');
-      });
-      if (exactMatch) {
-        bestMatch = exactMatch;
+        if (companyResponse.ok) {
+          const companyData = await companyResponse.json();
+          if (companyData.contacts && companyData.contacts.length > 0) {
+            searchResults = companyData;
+            searchStrategy = 'name_and_company';
+          }
+        }
+      } catch (e) {
+        console.log('Company search failed:', e.message);
       }
     }
+
+    // If no results found, return early
+    if (!searchResults) {
+      const apolloResponse = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'Cache-Control': 'no-cache', 
+          'Content-Type': 'application/json',
+          'X-Api-Key': apolloApiKey
+        },
+        body: JSON.stringify({
+          q_keywords: [firstName, lastName].filter(Boolean).join(' '),
+          page: 1,
+          per_page: 10
+        })
+      });
+
+      if (!apolloResponse.ok) {
+        const errorText = await apolloResponse.text();
+        console.error('Apollo API error:', apolloResponse.status, errorText);
+        return res.status(500).json({ 
+          error: 'Apollo API request failed', 
+          message: `Apollo returned ${apolloResponse.status}: ${errorText}` 
+        });
+      }
+
+      const apolloData = await apolloResponse.json();
+      console.log('Apollo API response (fallback):', JSON.stringify(apolloData, null, 2));
+
+      if (!apolloData.contacts || apolloData.contacts.length === 0) {
+        return res.json({
+          success: false,
+          message: 'No contacts found in Apollo database',
+          apolloResponse: apolloData,
+          searchStrategy: 'fallback',
+          searchParams: { firstName, lastName, cleanCompany }
+        });
+      }
+      searchResults = apolloData;
+      searchStrategy = 'fallback';
+    }
+
+    console.log(`Using search strategy: ${searchStrategy}`);
+    console.log('Apollo search results count:', searchResults.contacts.length);
+
+    // Find the best match using smart filtering
+    let bestMatch = searchResults.contacts[0];
+    let matchScore = 0;
+    let matchReason = 'first_result';
+
+    // Smart matching logic
+    for (const contact of searchResults.contacts) {
+      let score = 0;
+      let reason = '';
+
+      // LinkedIn URL exact match (highest priority)
+      if (linkedinUrl && contact.linkedin_url) {
+        const linkedinUrlLower = linkedinUrl.toLowerCase();
+        const contactLinkedinLower = contact.linkedin_url.toLowerCase();
+        const profileId = linkedinUrlLower.split('/in/')[1]?.split('/')[0] || '';
+        
+        if (contactLinkedinLower.includes(profileId) || profileId && contactLinkedinLower.includes(profileId)) {
+          score += 100;
+          reason = 'linkedin_url_match';
+        }
+      }
+
+      // Name matching
+      const contactName = (contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim()).toLowerCase();
+      const searchName = `${firstName || ''} ${lastName || ''}`.trim().toLowerCase();
+      if (searchName && contactName.includes(searchName)) {
+        score += 50;
+        reason = reason || 'name_match';
+      }
+
+      // Company matching
+      if (cleanCompany) {
+        const contactCompany = (contact.organization?.name || contact.organization_name || '').toLowerCase();
+        const searchCompanyLower = cleanCompany.toLowerCase();
+        if (contactCompany.includes(searchCompanyLower) || searchCompanyLower.includes(contactCompany)) {
+          score += 30;
+          reason = reason || 'company_match';
+        }
+      }
+
+      // Email availability bonus
+      if (contact.email || (contact.contact_emails && contact.contact_emails.length > 0)) {
+        score += 10;
+        reason = reason || 'has_email';
+      }
+
+      if (score > matchScore) {
+        matchScore = score;
+        bestMatch = contact;
+        matchReason = reason;
+      }
+    }
+
+    console.log(`Best match found with score ${matchScore}, reason: ${matchReason}`);
 
     // Extract email from the best match
     let email = null;
@@ -508,7 +605,11 @@ router.post('/apollo-email-search', [
           linkedin_url: bestMatch.linkedin_url,
           email_status: bestMatch.email_status
         },
-        apolloResponse: apolloData
+        searchStrategy: searchStrategy,
+        matchScore: matchScore,
+        matchReason: matchReason,
+        totalResults: searchResults.contacts.length,
+        apolloResponse: searchResults
       });
     } else {
       return res.json({
@@ -520,7 +621,11 @@ router.post('/apollo-email-search', [
           company: bestMatch.organization?.name || bestMatch.organization_name,
           linkedin_url: bestMatch.linkedin_url
         },
-        apolloResponse: apolloData
+        searchStrategy: searchStrategy,
+        matchScore: matchScore,
+        matchReason: matchReason,
+        totalResults: searchResults.contacts.length,
+        apolloResponse: searchResults
       });
     }
 
