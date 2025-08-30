@@ -242,7 +242,10 @@ router.get('/search', async (req, res) => {
  * Returns the best email for a contact matched by LinkedIn URL (case-insensitive, robust to www/trailing slash)
  */
 router.get('/email-by-linkedin', [
-  vquery('linkedinUrl').isString().trim().notEmpty().withMessage('linkedinUrl is required')
+  vquery('linkedinUrl').isString().trim().notEmpty().withMessage('linkedinUrl is required'),
+  vquery('firstName').optional().isString().trim(),
+  vquery('lastName').optional().isString().trim(),
+  vquery('company').optional().isString().trim()
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -250,6 +253,9 @@ router.get('/email-by-linkedin', [
   }
 
   const rawLinkedinUrl = (req.query.linkedinUrl || '').toString();
+  const firstName = (req.query.firstName || '').toString().trim();
+  const lastName = (req.query.lastName || '').toString().trim();
+  const company = (req.query.company || '').toString().trim();
   try {
     const variants = buildLinkedInUrlVariants(rawLinkedinUrl).map(v => v.toLowerCase());
     if (variants.length === 0) {
@@ -268,11 +274,31 @@ router.get('/email-by-linkedin', [
     `;
 
     const { rows: contactRows } = await query(contactSql, [variants]);
-    if (contactRows.length === 0) {
-      return res.json({ found: false, email: null, emails: [] });
+    let contact = contactRows[0];
+
+    // Fallback: match by name (+ optional company) if linkedin_url not stored in DB
+    if (!contact && firstName && lastName) {
+      const params = [firstName, lastName];
+      let where = `lower(first_name) = lower($1) AND lower(last_name) = lower($2)`;
+      if (company) {
+        params.push(company);
+        where += ` AND lower(company) = lower($3)`;
+      }
+
+      const byNameSql = `
+        SELECT id, first_name, last_name, linkedin_url, is_verified
+        FROM contacts
+        WHERE ${where}
+        ORDER BY is_verified DESC, updated_at DESC
+        LIMIT 1
+      `;
+      const { rows: nameRows } = await query(byNameSql, params);
+      contact = nameRows[0];
     }
 
-    const contact = contactRows[0];
+    if (!contact) {
+      return res.json({ found: false, email: null, emails: [] });
+    }
 
     // Get emails ordered by primary and verification
     const emailSql = `
