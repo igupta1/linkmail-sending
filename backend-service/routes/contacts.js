@@ -52,6 +52,43 @@ function buildLinkedInUrlVariants(rawUrl) {
   return Array.from(candidates);
 }
 
+// Normalize noisy company strings from LinkedIn (e.g., "Google · Full-time")
+function normalizeCompanyInput(rawCompany) {
+  if (!rawCompany || typeof rawCompany !== 'string') return '';
+  let value = rawCompany.trim();
+  if (!value) return '';
+  // Split on common separators used in LinkedIn UI labels
+  const separators = ['·', '|', ',', '\\n'];
+  for (const sep of separators) {
+    if (value.includes(sep)) {
+      value = value.split(sep)[0];
+    }
+  }
+  // Collapse multiple spaces, trim again
+  value = value.replace(/\s+/g, ' ').trim();
+  return value;
+}
+
+// Canonicalize to https://www.linkedin.com/in/{slug}/ (lowercased slug, https, www, no query/hash)
+function canonicalizeLinkedInProfile(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  const input = rawUrl.trim();
+  if (!input) return null;
+  const ensureScheme = (value) => (/^https?:\/\//i.test(value) ? value : `https://${value}`);
+  try {
+    const parsed = new URL(ensureScheme(input));
+    const host = parsed.hostname.toLowerCase();
+    if (!host.endsWith('linkedin.com')) return null;
+    // Extract slug from /in/{slug}
+    const match = parsed.pathname.match(/\/in\/([A-Za-z0-9_-]+)/i);
+    if (!match) return null;
+    const slug = match[1].toLowerCase();
+    return `https://www.linkedin.com/in/${slug}/`;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * POST /api/contacts
  * Create a contact with optional emails
@@ -87,13 +124,18 @@ router.post('/', [
     state = null,
     country = null,
     isVerified = false,
-    linkedinUrl = null,
+    linkedinUrl: rawLinkedinUrl = null,
     emails
   } = req.body;
 
   const emailList = emails == null
     ? []
     : (typeof emails === 'string' ? [emails] : emails).filter((e) => e && e.trim().length > 0);
+
+  // Canonicalize LinkedIn URL if provided
+  const linkedinUrl = rawLinkedinUrl
+    ? (canonicalizeLinkedInProfile(rawLinkedinUrl) || rawLinkedinUrl.trim())
+    : null;
 
   const client = await getClient();
   try {
@@ -256,8 +298,12 @@ router.get('/email-by-linkedin', [
   const firstName = (req.query.firstName || '').toString().trim();
   const lastName = (req.query.lastName || '').toString().trim();
   const company = (req.query.company || '').toString().trim();
+  const normalizedCompany = normalizeCompanyInput(company);
   try {
-    const variants = buildLinkedInUrlVariants(rawLinkedinUrl).map(v => v.toLowerCase());
+    const canonical = canonicalizeLinkedInProfile(rawLinkedinUrl);
+    const variants = canonical
+      ? [canonical.toLowerCase(), canonical.replace(/\/$/, '').toLowerCase()]
+      : buildLinkedInUrlVariants(rawLinkedinUrl).map(v => v.toLowerCase());
     if (variants.length === 0) {
       return res.status(400).json({ error: 'ValidationError', message: 'Invalid linkedinUrl' });
     }
@@ -280,9 +326,9 @@ router.get('/email-by-linkedin', [
     if (!contact && firstName && lastName) {
       const params = [firstName, lastName];
       let where = `lower(first_name) = lower($1) AND lower(last_name) = lower($2)`;
-      if (company) {
-        params.push(company);
-        where += ` AND lower(company) = lower($3)`;
+      if (normalizedCompany) {
+        params.push(`%${normalizedCompany}%`);
+        where += ` AND company ILIKE $3`;
       }
 
       const byNameSql = `
