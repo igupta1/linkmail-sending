@@ -445,12 +445,10 @@ router.post('/apollo-email-search', [
       headers: {
         'accept': 'application/json',
         'Cache-Control': 'no-cache',
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Api-Key': apolloApiKey
       },
-      body: JSON.stringify({
-        ...searchParams,
-        api_key: apolloApiKey
-      })
+      body: JSON.stringify(searchParams)
     });
 
     if (!apolloResponse.ok) {
