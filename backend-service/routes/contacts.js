@@ -1,10 +1,56 @@
 // Contacts routes for LinkMail backend
 
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const { body, validationResult, query: vquery } = require('express-validator');
 const { getClient, query } = require('../db');
 
 const router = express.Router();
+
+// Helper to normalize and generate LinkedIn URL variants for robust matching
+function buildLinkedInUrlVariants(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return [];
+
+  const candidates = new Set();
+
+  const trimmed = rawUrl.trim();
+  const lower = trimmed.toLowerCase();
+  candidates.add(lower);
+
+  // Toggle trailing slash variants
+  if (lower.endsWith('/')) {
+    candidates.add(lower.replace(/\/+$/, ''));
+  } else {
+    candidates.add(`${lower}/`);
+  }
+
+  // Ensure scheme for URL parsing
+  const ensureScheme = (value) => (/^https?:\/\//i.test(value) ? value : `https://${value}`);
+
+  try {
+    const urlWithScheme = ensureScheme(lower);
+    const parsed = new URL(urlWithScheme);
+    // Normalize host to include or exclude www
+    const hostNoWww = parsed.host.replace(/^www\./, '');
+    const hostWithWww = hostNoWww.startsWith('www.') ? hostNoWww : `www.${hostNoWww}`;
+
+    // Drop query and hash, keep pathname only
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+
+    const httpsBase = `https://${hostNoWww}${pathname}`;
+    const httpsBaseWww = `https://${hostWithWww}${pathname}`;
+
+    [httpsBase, `${httpsBase}/`, httpsBaseWww, `${httpsBaseWww}/`].forEach(v => candidates.add(v));
+
+    // Also include host+path without scheme variants
+    const noScheme = `${hostNoWww}${pathname}`;
+    const noSchemeWww = `${hostWithWww}${pathname}`;
+    [noScheme, `${noScheme}/`, noSchemeWww, `${noSchemeWww}/`].forEach(v => candidates.add(v));
+  } catch (e) {
+    // Ignore parsing errors, we still have basic variants
+  }
+
+  return Array.from(candidates);
+}
 
 /**
  * POST /api/contacts
@@ -187,6 +233,72 @@ router.get('/search', async (req, res) => {
   } catch (err) {
     console.error('Search contacts error:', err);
     return res.status(500).json({ error: 'InternalError', message: 'Failed to search contacts' });
+  }
+});
+
+/**
+ * GET /api/contacts/email-by-linkedin
+ * Query: linkedinUrl
+ * Returns the best email for a contact matched by LinkedIn URL (case-insensitive, robust to www/trailing slash)
+ */
+router.get('/email-by-linkedin', [
+  vquery('linkedinUrl').isString().trim().notEmpty().withMessage('linkedinUrl is required')
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+  }
+
+  const rawLinkedinUrl = (req.query.linkedinUrl || '').toString();
+  try {
+    const variants = buildLinkedInUrlVariants(rawLinkedinUrl).map(v => v.toLowerCase());
+    if (variants.length === 0) {
+      return res.status(400).json({ error: 'ValidationError', message: 'Invalid linkedinUrl' });
+    }
+
+    // Find contact by normalized linkedin_url
+    const contactSql = `
+      SELECT id, first_name, last_name, linkedin_url, is_verified
+      FROM contacts
+      WHERE linkedin_url IS NOT NULL
+        AND length(trim(linkedin_url)) > 0
+        AND lower(linkedin_url) = ANY($1)
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `;
+
+    const { rows: contactRows } = await query(contactSql, [variants]);
+    if (contactRows.length === 0) {
+      return res.json({ found: false, email: null, emails: [] });
+    }
+
+    const contact = contactRows[0];
+
+    // Get emails ordered by primary and verification
+    const emailSql = `
+      SELECT email, is_primary, is_verified
+      FROM contact_emails
+      WHERE contact_id = $1
+      ORDER BY is_primary DESC, is_verified DESC, id ASC
+    `;
+    const { rows: emailRows } = await query(emailSql, [contact.id]);
+
+    const bestEmail = emailRows.length > 0 ? emailRows[0].email : null;
+
+    return res.json({
+      found: true,
+      contactId: contact.id,
+      firstName: contact.first_name,
+      lastName: contact.last_name,
+      linkedinUrl: contact.linkedin_url,
+      isVerifiedContact: contact.is_verified,
+      email: bestEmail,
+      emails: emailRows.map(r => r.email),
+      emailMeta: emailRows
+    });
+  } catch (err) {
+    console.error('Lookup email by LinkedIn error:', err);
+    return res.status(500).json({ error: 'InternalError', message: 'Failed to look up email' });
   }
 });
 

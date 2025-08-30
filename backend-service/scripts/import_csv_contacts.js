@@ -3,19 +3,72 @@ const fs = require('fs');
 const { parse } = require('csv-parse');
 const { Pool } = require('pg');
 
-// CSV columns expected: First Name, Last Name, Title, Company, Email, Email Status, Person Linkedin URL, City, State, Country
+// CSV columns expected (case-insensitive; flexible on names):
+// - First Name, Last Name, Title/Job Title, Company, Email, Email Status,
+// - Person Linkedin URL / LinkedIn URL / Linkedin / LinkedIn / Profile URL, City, State, Country
+
+function getField(row, candidates) {
+  for (const key of candidates) {
+    if (key in row && typeof row[key] === 'string' && row[key].trim().length > 0) {
+      return row[key].trim();
+    }
+  }
+  // Case-insensitive fallback
+  const map = new Map(Object.entries(row).map(([k, v]) => [k.toLowerCase(), v]));
+  for (const key of candidates) {
+    const v = map.get(key.toLowerCase());
+    if (typeof v === 'string' && v.trim().length > 0) return v.trim();
+  }
+  return null;
+}
+
+function canonicalizeLinkedInUrl(raw) {
+  if (!raw) return null;
+  let url = raw.trim();
+  if (!url) return null;
+  // Add scheme if missing
+  if (!/^https?:\/\//i.test(url)) {
+    url = 'https://' + url;
+  }
+  try {
+    const u = new URL(url);
+    // Ensure it's a LinkedIn domain
+    if (!/linkedin\.com$/i.test(u.hostname) && !/\.linkedin\.com$/i.test(u.hostname)) {
+      return null; // ignore non-LinkedIn URLs
+    }
+    u.hash = '';
+    u.search = '';
+    // Normalize hostname
+    u.hostname = u.hostname.toLowerCase();
+    // Remove trailing slash for consistency
+    const normalized = u.toString().replace(/\/$/, '');
+    return normalized;
+  } catch {
+    return null;
+  }
+}
 
 async function upsertContactAndEmail(client, row) {
-  const firstName = row['First Name']?.trim();
-  const lastName = row['Last Name']?.trim();
-  const jobTitle = row['Title']?.trim() || null;
-  const company = row['Company']?.trim() || null;
-  const email = row['Email']?.trim();
-  const emailStatus = row['Email Status']?.trim()?.toLowerCase() || '';
-  const linkedinUrl = row['Person Linkedin URL']?.trim() || null;
-  const city = row['City']?.trim() || null;
-  const state = row['State']?.trim() || null;
-  const country = row['Country']?.trim() || null;
+  const firstName = getField(row, ['First Name']);
+  const lastName = getField(row, ['Last Name']);
+  const jobTitle = getField(row, ['Title', 'Job Title']);
+  const company = getField(row, ['Company', 'Company Name']);
+  const email = getField(row, ['Email', 'Work Email', 'Personal Email']);
+  const emailStatus = (getField(row, ['Email Status', 'Status']) || '').toLowerCase();
+  const rawLinkedIn = getField(row, [
+    'Person Linkedin URL',
+    'Person Linkedin Url',
+    'LinkedIn URL',
+    'Linkedin URL',
+    'LinkedIn',
+    'Linkedin',
+    'Profile URL',
+    'LinkedIn Profile URL'
+  ]);
+  const linkedinUrl = canonicalizeLinkedInUrl(rawLinkedIn);
+  const city = getField(row, ['City']);
+  const state = getField(row, ['State']);
+  const country = getField(row, ['Country']);
 
   if (!firstName || !lastName) {
     throw new Error('Missing First Name or Last Name');
@@ -56,15 +109,15 @@ async function upsertContactAndEmail(client, row) {
     // Update details if newly provided
     await client.query(
       `UPDATE contacts SET 
-         job_title = COALESCE($3, job_title),
-         company = COALESCE($4, company),
-         city = COALESCE($5, city),
-         state = COALESCE($6, state),
-         country = COALESCE($7, country),
-         linkedin_url = COALESCE($8, linkedin_url),
-         is_verified = CASE WHEN $9 THEN TRUE ELSE is_verified END
+         job_title = COALESCE($2, job_title),
+         company = COALESCE($3, company),
+         city = COALESCE($4, city),
+         state = COALESCE($5, state),
+         country = COALESCE($6, country),
+         linkedin_url = CASE WHEN $7::text IS NOT NULL AND length(trim($7::text)) > 0 THEN $7::text ELSE linkedin_url END,
+         is_verified = CASE WHEN $8 THEN TRUE ELSE is_verified END
        WHERE id = $1`,
-      [contactId, firstName, jobTitle, company, city, state, country, linkedinUrl, verified]
+      [contactId, jobTitle, company, city, state, country, linkedinUrl, verified]
     );
   }
 
