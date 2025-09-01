@@ -123,7 +123,13 @@ router.post('/send', [
   body('to').isEmail().withMessage('Valid recipient email is required'),
   body('subject').notEmpty().withMessage('Subject is required'),
   body('body').notEmpty().withMessage('Email body is required'),
-  body('attachments').optional().isArray().withMessage('Attachments must be an array')
+  body('attachments').optional().isArray().withMessage('Attachments must be an array'),
+  // Optional contact information
+  body('contactInfo.firstName').optional().isString().trim(),
+  body('contactInfo.lastName').optional().isString().trim(),
+  body('contactInfo.jobTitle').optional().isString().trim(),
+  body('contactInfo.company').optional().isString().trim(),
+  body('contactInfo.linkedinUrl').optional().isString().trim()
 ], async (req, res) => {
   // Validate request
   const errors = validationResult(req);
@@ -134,7 +140,7 @@ router.post('/send', [
     });
   }
 
-  const { to, subject, body, attachments = [] } = req.body;
+  const { to, subject, body, attachments = [], contactInfo = {} } = req.body;
   const userId = req.user.id;
 
   try {
@@ -192,21 +198,89 @@ router.post('/send', [
       let contactId;
       if (existing.length > 0) {
         contactId = existing[0].contact_id;
+        
+        // Update existing contact with new information if provided
+        if (contactInfo.firstName || contactInfo.lastName || contactInfo.jobTitle || contactInfo.company || contactInfo.linkedinUrl) {
+          const updateFields = [];
+          const updateValues = [];
+          let paramIndex = 1;
+          
+          if (contactInfo.firstName && contactInfo.firstName.trim()) {
+            updateFields.push(`first_name = $${paramIndex}`);
+            updateValues.push(contactInfo.firstName.trim());
+            paramIndex++;
+          }
+          
+          if (contactInfo.lastName && contactInfo.lastName.trim()) {
+            updateFields.push(`last_name = $${paramIndex}`);
+            updateValues.push(contactInfo.lastName.trim());
+            paramIndex++;
+          }
+          
+          if (contactInfo.jobTitle && contactInfo.jobTitle.trim()) {
+            updateFields.push(`job_title = $${paramIndex}`);
+            updateValues.push(contactInfo.jobTitle.trim());
+            paramIndex++;
+          }
+          
+          if (contactInfo.company && contactInfo.company.trim()) {
+            updateFields.push(`company = $${paramIndex}`);
+            updateValues.push(contactInfo.company.trim());
+            paramIndex++;
+          }
+          
+          if (contactInfo.linkedinUrl && contactInfo.linkedinUrl.trim()) {
+            updateFields.push(`linkedin_url = $${paramIndex}`);
+            updateValues.push(contactInfo.linkedinUrl.trim());
+            paramIndex++;
+          }
+          
+          if (updateFields.length > 0) {
+            updateFields.push(`updated_at = NOW()`);
+            updateValues.push(contactId);
+            
+            const updateContactSql = `
+              UPDATE contacts 
+              SET ${updateFields.join(', ')}
+              WHERE id = $${paramIndex}
+            `;
+            
+            await client.query(updateContactSql, updateValues);
+          }
+        }
       } else {
-        // Derive a basic name from the email local part
-        const localPart = recipientEmail.split('@')[0] || 'contact';
-        const nameParts = localPart.split(/[._-]+/).filter(Boolean);
-        const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Unknown';
-        const defaultFirst = capitalize(nameParts[0] || 'Unknown');
-        const defaultLast = capitalize(nameParts[1] || 'Contact');
+        // Use provided contact info or derive from email as fallback
+        let firstName, lastName;
+        
+        if (contactInfo.firstName && contactInfo.firstName.trim()) {
+          firstName = contactInfo.firstName.trim();
+        } else {
+          // Fallback: derive from email
+          const localPart = recipientEmail.split('@')[0] || 'contact';
+          const nameParts = localPart.split(/[._-]+/).filter(Boolean);
+          firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'Unknown';
+        }
+        
+        if (contactInfo.lastName && contactInfo.lastName.trim()) {
+          lastName = contactInfo.lastName.trim();
+        } else {
+          // Fallback: derive from email or use 'Contact'
+          const localPart = recipientEmail.split('@')[0] || 'contact';
+          const nameParts = localPart.split(/[._-]+/).filter(Boolean);
+          lastName = nameParts[1] ? nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1) : 'Contact';
+        }
+        
+        const jobTitle = (contactInfo.jobTitle && contactInfo.jobTitle.trim()) ? contactInfo.jobTitle.trim() : null;
+        const company = (contactInfo.company && contactInfo.company.trim()) ? contactInfo.company.trim() : null;
+        const linkedinUrl = (contactInfo.linkedinUrl && contactInfo.linkedinUrl.trim()) ? contactInfo.linkedinUrl.trim() : null;
 
-        // Create contact with verified=true
+        // Create contact with verified=true and all available info
         const insertContactSql = `
-          INSERT INTO contacts (first_name, last_name, is_verified)
-          VALUES ($1, $2, TRUE)
+          INSERT INTO contacts (first_name, last_name, job_title, company, linkedin_url, is_verified)
+          VALUES ($1, $2, $3, $4, $5, TRUE)
           RETURNING id
         `;
-        const { rows: contactRows } = await client.query(insertContactSql, [defaultFirst, defaultLast]);
+        const { rows: contactRows } = await client.query(insertContactSql, [firstName, lastName, jobTitle, company, linkedinUrl]);
         contactId = contactRows[0].id;
 
         // Insert email as primary (first email) and verified=true
