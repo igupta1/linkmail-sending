@@ -223,6 +223,7 @@ router.get('/facets', async (req, res) => {
  * GET /api/contacts/search
  * Query: jobTitle, company
  * Returns up to 3 contacts with name and linkedin url
+ * Search logic: 1) Exact matches first, 2) Substring matches if needed
  */
 router.get('/search', async (req, res) => {
   try {
@@ -239,8 +240,10 @@ router.get('/search', async (req, res) => {
       });
     }
 
-    // Case-insensitive, partial match, prefer verified and those with linkedin_url
-    const sql = `
+    let results = [];
+
+    // Step 1: Look for exact matches (case-insensitive)
+    const exactMatchSql = `
       SELECT id,
              first_name,
              last_name,
@@ -248,21 +251,16 @@ router.get('/search', async (req, res) => {
              company,
              linkedin_url
       FROM contacts
-      WHERE job_title ILIKE $1
-        AND company ILIKE $2
+      WHERE LOWER(job_title) = LOWER($1)
+        AND LOWER(company) = LOWER($2)
       ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
                is_verified DESC,
                updated_at DESC
       LIMIT 3
     `;
 
-    // Use wildcard matching on both sides to allow partials provided by dropdowns just in case
-    const { rows } = await query(sql, [
-      `%${jobTitle}%`,
-      `%${company}%`
-    ]);
-
-    const results = rows.map(r => ({
+    const exactRows = await query(exactMatchSql, [jobTitle, company]);
+    results = exactRows.rows.map(r => ({
       id: r.id,
       firstName: r.first_name,
       lastName: r.last_name,
@@ -270,6 +268,49 @@ router.get('/search', async (req, res) => {
       company: r.company,
       linkedinUrl: r.linkedin_url || null
     }));
+
+    // Step 2: If we don't have 3 results, look for substring matches
+    if (results.length < 3) {
+      const remainingNeeded = 3 - results.length;
+      
+      // Get IDs of exact matches to exclude them from substring search
+      const excludeIds = results.map(r => r.id);
+      const excludeClause = excludeIds.length > 0 ? 'AND id NOT IN (' + excludeIds.map((_, i) => `$${i + 3}`).join(',') + ')' : '';
+      
+      const substringMatchSql = `
+        SELECT id,
+               first_name,
+               last_name,
+               job_title,
+               company,
+               linkedin_url
+        FROM contacts
+        WHERE (
+          LOWER(job_title) LIKE LOWER($1) OR LOWER($1) LIKE LOWER(job_title)
+        ) AND (
+          LOWER(company) LIKE LOWER($2) OR LOWER($2) LIKE LOWER(company)
+        )
+        ${excludeClause}
+        ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
+                 is_verified DESC,
+                 updated_at DESC
+        LIMIT ${remainingNeeded}
+      `;
+
+      const params = [`%${jobTitle}%`, `%${company}%`, ...excludeIds];
+      const substringRows = await query(substringMatchSql, params);
+      
+      const substringResults = substringRows.rows.map(r => ({
+        id: r.id,
+        firstName: r.first_name,
+        lastName: r.last_name,
+        jobTitle: r.job_title,
+        company: r.company,
+        linkedinUrl: r.linkedin_url || null
+      }));
+
+      results = results.concat(substringResults);
+    }
 
     return res.json({ results });
   } catch (err) {
