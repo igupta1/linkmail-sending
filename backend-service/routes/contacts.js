@@ -458,9 +458,132 @@ router.post('/apollo-email-search', [
     let email = person.email;
 
     if (email) {
+      // Persist contact and email into our database
+      let savedContact = null;
+      let saved = false;
+      const client = await getClient();
+      try {
+        await client.query('BEGIN');
+
+        // Resolve best available identity fields
+        const resolvedFirst = (person.first_name || firstName || '').toString().trim();
+        const resolvedLast = (person.last_name || lastName || '').toString().trim();
+        const resolvedCompany = normalizeCompanyInput(person.organization?.name || company || '');
+        const resolvedTitle = (person.title || '').toString().trim();
+        const rawLinkedin = (person.linkedin_url || linkedinUrl || '').toString().trim();
+        const canonical = canonicalizeLinkedInProfile(rawLinkedin);
+
+        // Try to find existing contact by linkedin_url variants first
+        let contactRow = null;
+        if (rawLinkedin) {
+          const variants = canonical
+            ? [canonical.toLowerCase(), canonical.replace(/\/$/, '').toLowerCase()]
+            : buildLinkedInUrlVariants(rawLinkedin).map(v => v.toLowerCase());
+          if (variants.length > 0) {
+            const { rows } = await client.query(
+              `SELECT id, first_name, last_name, job_title, company, linkedin_url, is_verified
+               FROM contacts
+               WHERE linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0
+                 AND lower(linkedin_url) = ANY($1)
+               ORDER BY updated_at DESC
+               LIMIT 1`,
+              [variants]
+            );
+            contactRow = rows[0] || null;
+          }
+        }
+
+        // Fallback: find by name (+ optional company)
+        if (!contactRow && resolvedFirst && resolvedLast) {
+          const params = [resolvedFirst, resolvedLast];
+          let where = `lower(first_name) = lower($1) AND lower(last_name) = lower($2)`;
+          if (resolvedCompany) {
+            params.push(`%${resolvedCompany}%`);
+            where += ` AND company ILIKE $3`;
+          }
+          const { rows } = await client.query(
+            `SELECT id, first_name, last_name, job_title, company, linkedin_url, is_verified
+             FROM contacts
+             WHERE ${where}
+             ORDER BY is_verified DESC, updated_at DESC
+             LIMIT 1`,
+            params
+          );
+          contactRow = rows[0] || null;
+        }
+
+        // Insert contact if not found
+        if (!contactRow) {
+          const insertSql = `
+            INSERT INTO contacts (first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url)
+            VALUES ($1, $2, $3, $4, NULL, NULL, NULL, $5, $6)
+            RETURNING id, first_name, last_name, job_title, company, linkedin_url, is_verified
+          `;
+          const { rows } = await client.query(insertSql, [
+            resolvedFirst || null,
+            resolvedLast || null,
+            resolvedTitle || null,
+            resolvedCompany || null,
+            false,
+            canonical || (rawLinkedin || null)
+          ]);
+          contactRow = rows[0];
+        } else {
+          // Optionally refresh sparse fields we may have learned from Apollo
+          const maybeUpdate = [];
+          const params = [];
+          let idx = 1;
+          if (resolvedTitle && !contactRow.job_title) { maybeUpdate.push(`job_title = $${idx++}`); params.push(resolvedTitle); }
+          if (resolvedCompany && !contactRow.company) { maybeUpdate.push(`company = $${idx++}`); params.push(resolvedCompany); }
+          if (canonical && !contactRow.linkedin_url) { maybeUpdate.push(`linkedin_url = $${idx++}`); params.push(canonical); }
+          if (maybeUpdate.length > 0) {
+            params.push(contactRow.id);
+            await client.query(`UPDATE contacts SET ${maybeUpdate.join(', ')}, updated_at = NOW() WHERE id = $${idx}`, params);
+          }
+        }
+
+        // Ensure email row exists; set primary if none exists yet
+        let isPrimary = false;
+        {
+          const { rows } = await client.query(
+            'SELECT COUNT(1) AS n FROM contact_emails WHERE contact_id = $1',
+            [contactRow.id]
+          );
+          isPrimary = (parseInt(rows[0]?.n || '0', 10) === 0);
+        }
+
+        const emailStatus = (person.email_status || '').toString().toLowerCase();
+        const isEmailVerified = emailStatus === 'verified' || emailStatus === 'valid' || emailStatus === 'deliverable';
+
+        await client.query(
+          `INSERT INTO contact_emails (contact_id, email, is_primary, is_verified)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (contact_id, email) DO UPDATE SET
+             is_verified = EXCLUDED.is_verified
+          `,
+          [contactRow.id, email, isPrimary, isEmailVerified]
+        );
+
+        await client.query('COMMIT');
+        saved = true;
+
+        const { rows: viewRows } = await query(
+          'SELECT * FROM contacts_with_emails WHERE id = $1',
+          [contactRow.id]
+        );
+        savedContact = viewRows[0] || contactRow;
+      } catch (persistErr) {
+        console.error('Apollo enrichment persistence error:', persistErr);
+        try { await client.query('ROLLBACK'); } catch (_) {}
+      } finally {
+        client.release();
+      }
+
       return res.json({
         success: true,
         email: email,
+        saved,
+        savedContact,
         contact: {
           name: person.name || `${person.first_name || ''} ${person.last_name || ''}`.trim(),
           title: person.title,
