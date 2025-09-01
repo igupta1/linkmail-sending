@@ -187,11 +187,11 @@ router.post('/', [
 
 /**
  * GET /api/contacts/facets
- * Return distinct job titles and companies for dropdowns
+ * Return distinct job titles and companies for dropdowns, along with total count
  */
 router.get('/facets', async (req, res) => {
   try {
-    const [jobTitlesRes, companiesRes] = await Promise.all([
+    const [jobTitlesRes, companiesRes, countRes] = await Promise.all([
       query(
         `SELECT DISTINCT ON (lower(job_title)) job_title
          FROM contacts
@@ -203,13 +203,15 @@ router.get('/facets', async (req, res) => {
          FROM contacts
          WHERE company IS NOT NULL AND length(trim(company)) > 0
          ORDER BY lower(company), company ASC`
-      )
+      ),
+      query('SELECT COUNT(*) as total_contacts FROM contacts')
     ]);
 
     const jobTitles = jobTitlesRes.rows.map(r => r.job_title);
     const companies = companiesRes.rows.map(r => r.company);
+    const totalContacts = parseInt(countRes.rows[0].total_contacts);
 
-    res.json({ jobTitles, companies });
+    res.json({ jobTitles, companies, totalContacts });
   } catch (err) {
     console.error('Facets error:', err);
     res.status(500).json({ error: 'InternalError', message: 'Failed to fetch facets' });
