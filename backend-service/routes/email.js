@@ -195,59 +195,9 @@ router.post('/send', [
         [recipientEmail]
       );
 
-      let contactId;
       if (existing.length > 0) {
-        contactId = existing[0].contact_id;
-        
-        // Update existing contact with new information if provided
-        if (contactInfo.firstName || contactInfo.lastName || contactInfo.jobTitle || contactInfo.company || contactInfo.linkedinUrl) {
-          const updateFields = [];
-          const updateValues = [];
-          let paramIndex = 1;
-          
-          if (contactInfo.firstName && contactInfo.firstName.trim()) {
-            updateFields.push(`first_name = $${paramIndex}`);
-            updateValues.push(contactInfo.firstName.trim());
-            paramIndex++;
-          }
-          
-          if (contactInfo.lastName && contactInfo.lastName.trim()) {
-            updateFields.push(`last_name = $${paramIndex}`);
-            updateValues.push(contactInfo.lastName.trim());
-            paramIndex++;
-          }
-          
-          if (contactInfo.jobTitle && contactInfo.jobTitle.trim()) {
-            updateFields.push(`job_title = $${paramIndex}`);
-            updateValues.push(contactInfo.jobTitle.trim());
-            paramIndex++;
-          }
-          
-          if (contactInfo.company && contactInfo.company.trim()) {
-            updateFields.push(`company = $${paramIndex}`);
-            updateValues.push(contactInfo.company.trim());
-            paramIndex++;
-          }
-          
-          if (contactInfo.linkedinUrl && contactInfo.linkedinUrl.trim()) {
-            updateFields.push(`linkedin_url = $${paramIndex}`);
-            updateValues.push(contactInfo.linkedinUrl.trim());
-            paramIndex++;
-          }
-          
-          if (updateFields.length > 0) {
-            updateFields.push(`updated_at = NOW()`);
-            updateValues.push(contactId);
-            
-            const updateContactSql = `
-              UPDATE contacts 
-              SET ${updateFields.join(', ')}
-              WHERE id = $${paramIndex}
-            `;
-            
-            await client.query(updateContactSql, updateValues);
-          }
-        }
+        // Email already exists - do nothing (don't update existing contacts)
+        console.log(`Email ${recipientEmail} already exists in database, skipping contact creation/update`);
       } else {
         // Use provided contact info or derive from email as fallback
         let firstName, lastName;
