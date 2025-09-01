@@ -4,6 +4,7 @@ const express = require('express');
 const { google } = require('googleapis');
 const { body, validationResult } = require('express-validator');
 const { getUserSession, setUserSession } = require('../store');
+const { getClient } = require('../db');
 
 const router = express.Router();
 
@@ -172,6 +173,58 @@ router.post('/send', [
         raw: rawMessage
       }
     });
+
+    // Persist recipient in contacts if not already present
+    const recipientEmail = to.trim().toLowerCase();
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      // Check if email already exists
+      const { rows: existing } = await client.query(
+        `SELECT c.id AS contact_id
+         FROM contact_emails ce
+         JOIN contacts c ON c.id = ce.contact_id
+         WHERE lower(ce.email) = lower($1)
+         LIMIT 1`,
+        [recipientEmail]
+      );
+
+      let contactId;
+      if (existing.length > 0) {
+        contactId = existing[0].contact_id;
+      } else {
+        // Derive a basic name from the email local part
+        const localPart = recipientEmail.split('@')[0] || 'contact';
+        const nameParts = localPart.split(/[._-]+/).filter(Boolean);
+        const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Unknown';
+        const defaultFirst = capitalize(nameParts[0] || 'Unknown');
+        const defaultLast = capitalize(nameParts[1] || 'Contact');
+
+        // Create contact with verified=true
+        const insertContactSql = `
+          INSERT INTO contacts (first_name, last_name, is_verified)
+          VALUES ($1, $2, TRUE)
+          RETURNING id
+        `;
+        const { rows: contactRows } = await client.query(insertContactSql, [defaultFirst, defaultLast]);
+        contactId = contactRows[0].id;
+
+        // Insert email as primary (first email) and verified=true
+        await client.query(
+          `INSERT INTO contact_emails (contact_id, email, is_primary, is_verified)
+           VALUES ($1, $2, $3, TRUE)
+           ON CONFLICT (contact_id, email) DO NOTHING`,
+          [contactId, recipientEmail, true]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (persistErr) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      console.error('Recipient persistence error:', persistErr);
+    } finally {
+      try { client.release(); } catch (_) {}
+    }
 
     // Save email to user's history
     if (!userSession.emailHistory) {
