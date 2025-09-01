@@ -524,7 +524,7 @@ router.post('/apollo-email-search', [
             resolvedLast || null,
             resolvedTitle || null,
             resolvedCompany || null,
-            false,
+            true,
             canonical || (rawLinkedin || null)
           ]);
           contactRow = rows[0];
@@ -536,6 +536,8 @@ router.post('/apollo-email-search', [
           if (resolvedTitle && !contactRow.job_title) { maybeUpdate.push(`job_title = $${idx++}`); params.push(resolvedTitle); }
           if (resolvedCompany && !contactRow.company) { maybeUpdate.push(`company = $${idx++}`); params.push(resolvedCompany); }
           if (canonical && !contactRow.linkedin_url) { maybeUpdate.push(`linkedin_url = $${idx++}`); params.push(canonical); }
+          // Mark contact as verified because email came from Apollo
+          maybeUpdate.push(`is_verified = TRUE`);
           if (maybeUpdate.length > 0) {
             params.push(contactRow.id);
             await client.query(`UPDATE contacts SET ${maybeUpdate.join(', ')}, updated_at = NOW() WHERE id = $${idx}`, params);
@@ -552,14 +554,14 @@ router.post('/apollo-email-search', [
           isPrimary = (parseInt(rows[0]?.n || '0', 10) === 0);
         }
 
-        const emailStatus = (person.email_status || '').toString().toLowerCase();
-        const isEmailVerified = emailStatus === 'verified' || emailStatus === 'valid' || emailStatus === 'deliverable';
+        // Email obtained via Apollo: treat as verified
+        const isEmailVerified = true;
 
         await client.query(
           `INSERT INTO contact_emails (contact_id, email, is_primary, is_verified)
            VALUES ($1, $2, $3, $4)
            ON CONFLICT (contact_id, email) DO UPDATE SET
-             is_verified = EXCLUDED.is_verified
+             is_verified = TRUE
           `,
           [contactRow.id, email, isPrimary, isEmailVerified]
         );
