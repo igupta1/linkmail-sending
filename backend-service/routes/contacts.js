@@ -351,7 +351,7 @@ router.get('/email-by-linkedin', [
 
     // Find contact by normalized linkedin_url
     const contactSql = `
-      SELECT id, first_name, last_name, linkedin_url, is_verified
+      SELECT id, first_name, last_name, job_title, company, linkedin_url, is_verified
       FROM contacts
       WHERE linkedin_url IS NOT NULL
         AND length(trim(linkedin_url)) > 0
@@ -373,7 +373,7 @@ router.get('/email-by-linkedin', [
       }
 
       const byNameSql = `
-        SELECT id, first_name, last_name, linkedin_url, is_verified
+        SELECT id, first_name, last_name, job_title, company, linkedin_url, is_verified
         FROM contacts
         WHERE ${where}
         ORDER BY is_verified DESC, updated_at DESC
@@ -403,6 +403,8 @@ router.get('/email-by-linkedin', [
       contactId: contact.id,
       firstName: contact.first_name,
       lastName: contact.last_name,
+      jobTitle: contact.job_title,
+      company: contact.company,
       linkedinUrl: contact.linkedin_url,
       isVerifiedContact: contact.is_verified,
       email: bestEmail,
