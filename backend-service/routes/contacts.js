@@ -343,11 +343,20 @@ router.get('/email-by-linkedin', [
   try {
     const canonical = canonicalizeLinkedInProfile(rawLinkedinUrl);
     const variants = canonical
-      ? [canonical.toLowerCase(), canonical.replace(/\/$/, '').toLowerCase()]
+      ? [
+          canonical.toLowerCase(), 
+          canonical.replace(/\/$/, '').toLowerCase(),
+          // Also include HTTP variants for backward compatibility
+          canonical.toLowerCase().replace('https://', 'http://'),
+          canonical.replace(/\/$/, '').toLowerCase().replace('https://', 'http://')
+        ]
       : buildLinkedInUrlVariants(rawLinkedinUrl).map(v => v.toLowerCase());
     if (variants.length === 0) {
       return res.status(400).json({ error: 'ValidationError', message: 'Invalid linkedinUrl' });
     }
+    
+    // Debug: log the variants being searched
+    console.log(`[DEBUG] Searching for LinkedIn URL variants:`, variants);
 
     // Find contact by normalized linkedin_url
     const contactSql = `
@@ -522,7 +531,13 @@ router.post('/apollo-email-search', [
         let contactRow = null;
         if (rawLinkedin) {
           const variants = canonical
-            ? [canonical.toLowerCase(), canonical.replace(/\/$/, '').toLowerCase()]
+            ? [
+                canonical.toLowerCase(), 
+                canonical.replace(/\/$/, '').toLowerCase(),
+                // Also include HTTP variants for backward compatibility
+                canonical.toLowerCase().replace('https://', 'http://'),
+                canonical.replace(/\/$/, '').toLowerCase().replace('https://', 'http://')
+              ]
             : buildLinkedInUrlVariants(rawLinkedin).map(v => v.toLowerCase());
           if (variants.length > 0) {
             const { rows } = await client.query(
