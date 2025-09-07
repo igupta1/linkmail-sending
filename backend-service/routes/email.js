@@ -180,75 +180,7 @@ router.post('/send', [
       }
     });
 
-    // Persist recipient in contacts if not already present
-    const recipientEmail = to.trim().toLowerCase();
-    const client = await getClient();
-    try {
-      await client.query('BEGIN');
-      // Check if email already exists
-      const { rows: existing } = await client.query(
-        `SELECT c.id AS contact_id
-         FROM contact_emails ce
-         JOIN contacts c ON c.id = ce.contact_id
-         WHERE lower(ce.email) = lower($1)
-         LIMIT 1`,
-        [recipientEmail]
-      );
-
-      if (existing.length > 0) {
-        // Email already exists - do nothing (don't update existing contacts)
-        console.log(`Email ${recipientEmail} already exists in database, skipping contact creation/update`);
-      } else {
-        // Use provided contact info or derive from email as fallback
-        let firstName, lastName;
-        
-        if (contactInfo.firstName && contactInfo.firstName.trim()) {
-          firstName = contactInfo.firstName.trim();
-        } else {
-          // Fallback: derive from email
-          const localPart = recipientEmail.split('@')[0] || 'contact';
-          const nameParts = localPart.split(/[._-]+/).filter(Boolean);
-          firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'Unknown';
-        }
-        
-        if (contactInfo.lastName && contactInfo.lastName.trim()) {
-          lastName = contactInfo.lastName.trim();
-        } else {
-          // Fallback: derive from email or use 'Contact'
-          const localPart = recipientEmail.split('@')[0] || 'contact';
-          const nameParts = localPart.split(/[._-]+/).filter(Boolean);
-          lastName = nameParts[1] ? nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1) : 'Contact';
-        }
-        
-        const jobTitle = (contactInfo.jobTitle && contactInfo.jobTitle.trim()) ? contactInfo.jobTitle.trim() : null;
-        const company = (contactInfo.company && contactInfo.company.trim()) ? contactInfo.company.trim() : null;
-        const linkedinUrl = (contactInfo.linkedinUrl && contactInfo.linkedinUrl.trim()) ? contactInfo.linkedinUrl.trim() : null;
-
-        // Create contact with verified=true and all available info
-        const insertContactSql = `
-          INSERT INTO contacts (first_name, last_name, job_title, company, linkedin_url, is_verified)
-          VALUES ($1, $2, $3, $4, $5, TRUE)
-          RETURNING id
-        `;
-        const { rows: contactRows } = await client.query(insertContactSql, [firstName, lastName, jobTitle, company, linkedinUrl]);
-        contactId = contactRows[0].id;
-
-        // Insert email as primary (first email) and verified=true
-        await client.query(
-          `INSERT INTO contact_emails (contact_id, email, is_primary, is_verified)
-           VALUES ($1, $2, $3, TRUE)
-           ON CONFLICT (contact_id, email) DO NOTHING`,
-          [contactId, recipientEmail, true]
-        );
-      }
-
-      await client.query('COMMIT');
-    } catch (persistErr) {
-      try { await client.query('ROLLBACK'); } catch (_) {}
-      console.error('Recipient persistence error:', persistErr);
-    } finally {
-      try { client.release(); } catch (_) {}
-    }
+    // Contact creation removed - no longer auto-creating contacts when sending emails
 
     // Save email to user's history
     if (!userSession.emailHistory) {
