@@ -234,6 +234,7 @@ router.get('/facets', async (req, res) => {
  * 2) Same company only (if < 3 results)
  * 3) Same category only (if < 3 results)
  * 4) Return whatever found (up to 3 total)
+ * Excludes contacts that the user has already contacted
  */
 router.get('/search-similar', async (req, res) => {
   try {
@@ -250,10 +251,31 @@ router.get('/search-similar', async (req, res) => {
       });
     }
 
+    // Get user's contacted LinkedIn URLs to exclude from recommendations
+    const userId = req.user.id;
+    let contactedLinkedins = [];
+    try {
+      const userProfileSql = `SELECT contacted_linkedins FROM user_profiles WHERE user_id = $1`;
+      const userProfileRows = await query(userProfileSql, [userId]);
+      if (userProfileRows.rows.length > 0 && userProfileRows.rows[0].contacted_linkedins) {
+        contactedLinkedins = userProfileRows.rows[0].contacted_linkedins.map(url => url.toLowerCase());
+      }
+    } catch (error) {
+      console.warn('Could not fetch user contacted linkedins, proceeding without filtering:', error);
+    }
+
+    console.log(`Excluding ${contactedLinkedins.length} contacted LinkedIn URLs for user ${userId}`);
+
     let results = [];
 
     // Step 1: Search for people with same category AND same company
     console.log(`Step 1: Searching by category: ${category} + company: ${company}`);
+    
+    // Build exclusion clause for contacted LinkedIn URLs
+    const contactedExcludeClause = contactedLinkedins.length > 0 
+      ? `AND (linkedin_url IS NULL OR LOWER(linkedin_url) <> ALL($3))`
+      : '';
+    
     const categoryCompanySql = `
       SELECT id,
              first_name,
@@ -265,13 +287,17 @@ router.get('/search-similar', async (req, res) => {
       FROM contacts
       WHERE LOWER(category) = LOWER($1)
         AND LOWER(company) = LOWER($2)
+        ${contactedExcludeClause}
       ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
                is_verified DESC,
                updated_at DESC
       LIMIT 3
     `;
 
-    const categoryCompanyRows = await query(categoryCompanySql, [category, company]);
+    const categoryCompanyParams = contactedLinkedins.length > 0 
+      ? [category, company, contactedLinkedins] 
+      : [category, company];
+    const categoryCompanyRows = await query(categoryCompanySql, categoryCompanyParams);
     results = categoryCompanyRows.rows.map(r => ({
       id: r.id,
       firstName: r.first_name,
@@ -292,7 +318,21 @@ router.get('/search-similar', async (req, res) => {
       
       // Get IDs of existing results to exclude them
       const excludeIds = results.map(r => r.id);
-      const excludeClause = excludeIds.length > 0 ? 'AND id NOT IN (' + excludeIds.map((_, i) => `$${i + 2}`).join(',') + ')' : '';
+      let paramIndex = 2;
+      let whereClause = 'WHERE LOWER(company) = LOWER($1)';
+      let params = [company];
+      
+      // Exclude already found results
+      if (excludeIds.length > 0) {
+        whereClause += ` AND id NOT IN (${excludeIds.map(() => `$${paramIndex++}`).join(',')})`;
+        params.push(...excludeIds);
+      }
+      
+      // Exclude contacted LinkedIn URLs
+      if (contactedLinkedins.length > 0) {
+        whereClause += ` AND (linkedin_url IS NULL OR LOWER(linkedin_url) <> ALL($${paramIndex}))`;
+        params.push(contactedLinkedins);
+      }
       
       const companySql = `
         SELECT id,
@@ -303,15 +343,13 @@ router.get('/search-similar', async (req, res) => {
                category,
                linkedin_url
         FROM contacts
-        WHERE LOWER(company) = LOWER($1)
-        ${excludeClause}
+        ${whereClause}
         ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
                  is_verified DESC,
                  updated_at DESC
         LIMIT ${remainingNeeded}
       `;
 
-      const params = [company, ...excludeIds];
       const companyRows = await query(companySql, params);
       
       const companyResults = companyRows.rows.map(r => ({
@@ -336,7 +374,21 @@ router.get('/search-similar', async (req, res) => {
       
       // Get IDs of existing results to exclude them
       const excludeIds = results.map(r => r.id);
-      const excludeClause = excludeIds.length > 0 ? 'AND id NOT IN (' + excludeIds.map((_, i) => `$${i + 2}`).join(',') + ')' : '';
+      let paramIndex = 2;
+      let whereClause = 'WHERE LOWER(category) = LOWER($1)';
+      let params = [category];
+      
+      // Exclude already found results
+      if (excludeIds.length > 0) {
+        whereClause += ` AND id NOT IN (${excludeIds.map(() => `$${paramIndex++}`).join(',')})`;
+        params.push(...excludeIds);
+      }
+      
+      // Exclude contacted LinkedIn URLs
+      if (contactedLinkedins.length > 0) {
+        whereClause += ` AND (linkedin_url IS NULL OR LOWER(linkedin_url) <> ALL($${paramIndex}))`;
+        params.push(contactedLinkedins);
+      }
       
       const categorySql = `
         SELECT id,
@@ -347,16 +399,15 @@ router.get('/search-similar', async (req, res) => {
                category,
                linkedin_url
         FROM contacts
-        WHERE LOWER(category) = LOWER($1)
-        ${excludeClause}
+        ${whereClause}
         ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
                  is_verified DESC,
                  updated_at DESC
         LIMIT ${remainingNeeded}
       `;
 
-      const params = [category, ...excludeIds];
-      const categoryRows = await query(categorySql, params);
+      const params_final = params;
+      const categoryRows = await query(categorySql, params_final);
       
       const categoryResults = categoryRows.rows.map(r => ({
         id: r.id,
@@ -388,6 +439,7 @@ router.get('/search-similar', async (req, res) => {
  * Search logic: 
  * 1) If jobTitle matches a predefined category, search by category + company
  * 2) Otherwise, use job_title substring matching + company
+ * Excludes contacts that the user has already contacted
  */
 router.get('/search', async (req, res) => {
   try {
@@ -403,6 +455,26 @@ router.get('/search', async (req, res) => {
         message: 'Both jobTitle and company are required'
       });
     }
+
+    // Get user's contacted LinkedIn URLs to exclude from recommendations
+    const userId = req.user.id;
+    let contactedLinkedins = [];
+    try {
+      const userProfileSql = `SELECT contacted_linkedins FROM user_profiles WHERE user_id = $1`;
+      const userProfileRows = await query(userProfileSql, [userId]);
+      if (userProfileRows.rows.length > 0 && userProfileRows.rows[0].contacted_linkedins) {
+        contactedLinkedins = userProfileRows.rows[0].contacted_linkedins.map(url => url.toLowerCase());
+      }
+    } catch (error) {
+      console.warn('Could not fetch user contacted linkedins, proceeding without filtering:', error);
+    }
+
+    console.log(`Excluding ${contactedLinkedins.length} contacted LinkedIn URLs for user ${userId} in search`);
+
+    // Build exclusion clause for contacted LinkedIn URLs
+    const contactedExcludeClause = contactedLinkedins.length > 0 
+      ? `AND (linkedin_url IS NULL OR LOWER(linkedin_url) <> ALL($3))`
+      : '';
 
     // Predefined categories for exact matching
     const predefinedCategories = [
@@ -433,13 +505,17 @@ router.get('/search', async (req, res) => {
         FROM contacts
         WHERE LOWER(category) = LOWER($1)
           AND LOWER(company) LIKE LOWER($2)
+          ${contactedExcludeClause}
         ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
                  is_verified DESC,
                  updated_at DESC
         LIMIT 3
       `;
 
-      const categoryRows = await query(categorySearchSql, [jobTitle, `%${company}%`]);
+      const categoryParams = contactedLinkedins.length > 0 
+        ? [jobTitle, `%${company}%`, contactedLinkedins] 
+        : [jobTitle, `%${company}%`];
+      const categoryRows = await query(categorySearchSql, categoryParams);
       results = categoryRows.rows.map(r => ({
         id: r.id,
         firstName: r.first_name,
@@ -466,13 +542,17 @@ router.get('/search', async (req, res) => {
         FROM contacts
         WHERE LOWER(job_title) = LOWER($1)
           AND LOWER(company) = LOWER($2)
+          ${contactedExcludeClause}
         ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
                  is_verified DESC,
                  updated_at DESC
         LIMIT 3
       `;
 
-      const exactRows = await query(exactMatchSql, [jobTitle, company]);
+      const exactParams = contactedLinkedins.length > 0 
+        ? [jobTitle, company, contactedLinkedins] 
+        : [jobTitle, company];
+      const exactRows = await query(exactMatchSql, exactParams);
       results = exactRows.rows.map(r => ({
         id: r.id,
         firstName: r.first_name,
@@ -489,7 +569,25 @@ router.get('/search', async (req, res) => {
         
         // Get IDs of exact matches to exclude them from substring search
         const excludeIds = results.map(r => r.id);
-        const excludeClause = excludeIds.length > 0 ? 'AND id NOT IN (' + excludeIds.map((_, i) => `$${i + 3}`).join(',') + ')' : '';
+        let paramIndex = 3;
+        let whereClause = `WHERE (
+            LOWER(job_title) LIKE LOWER($1) OR LOWER($1) LIKE LOWER(job_title)
+          ) AND (
+            LOWER(company) LIKE LOWER($2) OR LOWER($2) LIKE LOWER(company)
+          )`;
+        let params = [`%${jobTitle}%`, `%${company}%`];
+        
+        // Exclude already found results
+        if (excludeIds.length > 0) {
+          whereClause += ` AND id NOT IN (${excludeIds.map(() => `$${paramIndex++}`).join(',')})`;
+          params.push(...excludeIds);
+        }
+        
+        // Exclude contacted LinkedIn URLs
+        if (contactedLinkedins.length > 0) {
+          whereClause += ` AND (linkedin_url IS NULL OR LOWER(linkedin_url) <> ALL($${paramIndex}))`;
+          params.push(contactedLinkedins);
+        }
         
         const substringMatchSql = `
           SELECT id,
@@ -500,19 +598,13 @@ router.get('/search', async (req, res) => {
                  category,
                  linkedin_url
           FROM contacts
-          WHERE (
-            LOWER(job_title) LIKE LOWER($1) OR LOWER($1) LIKE LOWER(job_title)
-          ) AND (
-            LOWER(company) LIKE LOWER($2) OR LOWER($2) LIKE LOWER(company)
-          )
-          ${excludeClause}
+          ${whereClause}
           ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
                    is_verified DESC,
                    updated_at DESC
           LIMIT ${remainingNeeded}
         `;
 
-        const params = [`%${jobTitle}%`, `%${company}%`, ...excludeIds];
         const substringRows = await query(substringMatchSql, params);
         
         const substringResults = substringRows.rows.map(r => ({
