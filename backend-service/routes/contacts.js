@@ -230,7 +230,9 @@ router.get('/facets', async (req, res) => {
  * GET /api/contacts/search
  * Query: jobTitle, company
  * Returns up to 3 contacts with name and linkedin url
- * Search logic: 1) Exact matches first, 2) Substring matches if needed
+ * Search logic: 
+ * 1) If jobTitle matches a predefined category, search by category + company
+ * 2) Otherwise, use job_title substring matching + company
  */
 router.get('/search', async (req, res) => {
   try {
@@ -247,46 +249,25 @@ router.get('/search', async (req, res) => {
       });
     }
 
+    // Predefined categories for exact matching
+    const predefinedCategories = [
+      'Analyst', 'CEO', 'Founder', 'Co-Founder', 'Consultant', 
+      'Data Scientist', 'Designer', 'Product Manager', 'Recruiter', 
+      'University Recruiter', 'Software Engineer', 'Talent Acquisition'
+    ];
+
+    // Check if the jobTitle is one of our predefined categories (case-insensitive)
+    const isCategory = predefinedCategories.some(category => 
+      category.toLowerCase() === jobTitle.toLowerCase()
+    );
+
     let results = [];
 
-    // Step 1: Look for exact matches (case-insensitive)
-    const exactMatchSql = `
-      SELECT id,
-             first_name,
-             last_name,
-             job_title,
-             company,
-             category,
-             linkedin_url
-      FROM contacts
-      WHERE LOWER(job_title) = LOWER($1)
-        AND LOWER(company) = LOWER($2)
-      ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
-               is_verified DESC,
-               updated_at DESC
-      LIMIT 3
-    `;
-
-    const exactRows = await query(exactMatchSql, [jobTitle, company]);
-    results = exactRows.rows.map(r => ({
-      id: r.id,
-      firstName: r.first_name,
-      lastName: r.last_name,
-      jobTitle: r.job_title,
-      company: r.company,
-      category: r.category || null,
-      linkedinUrl: r.linkedin_url || null
-    }));
-
-    // Step 2: If we don't have 3 results, look for substring matches
-    if (results.length < 3) {
-      const remainingNeeded = 3 - results.length;
+    if (isCategory) {
+      // Search by category + company
+      console.log(`Searching by category: ${jobTitle} + company: ${company}`);
       
-      // Get IDs of exact matches to exclude them from substring search
-      const excludeIds = results.map(r => r.id);
-      const excludeClause = excludeIds.length > 0 ? 'AND id NOT IN (' + excludeIds.map((_, i) => `$${i + 3}`).join(',') + ')' : '';
-      
-      const substringMatchSql = `
+      const categorySearchSql = `
         SELECT id,
                first_name,
                last_name,
@@ -295,22 +276,16 @@ router.get('/search', async (req, res) => {
                category,
                linkedin_url
         FROM contacts
-        WHERE (
-          LOWER(job_title) LIKE LOWER($1) OR LOWER($1) LIKE LOWER(job_title)
-        ) AND (
-          LOWER(company) LIKE LOWER($2) OR LOWER($2) LIKE LOWER(company)
-        )
-        ${excludeClause}
+        WHERE LOWER(category) = LOWER($1)
+          AND LOWER(company) LIKE LOWER($2)
         ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
                  is_verified DESC,
                  updated_at DESC
-        LIMIT ${remainingNeeded}
+        LIMIT 3
       `;
 
-      const params = [`%${jobTitle}%`, `%${company}%`, ...excludeIds];
-      const substringRows = await query(substringMatchSql, params);
-      
-      const substringResults = substringRows.rows.map(r => ({
+      const categoryRows = await query(categorySearchSql, [jobTitle, `%${company}%`]);
+      results = categoryRows.rows.map(r => ({
         id: r.id,
         firstName: r.first_name,
         lastName: r.last_name,
@@ -320,9 +295,86 @@ router.get('/search', async (req, res) => {
         linkedinUrl: r.linkedin_url || null
       }));
 
-      results = results.concat(substringResults);
+    } else {
+      // Use existing job_title substring search logic
+      console.log(`Searching by job_title substring: ${jobTitle} + company: ${company}`);
+      
+      // Step 1: Look for exact matches (case-insensitive)
+      const exactMatchSql = `
+        SELECT id,
+               first_name,
+               last_name,
+               job_title,
+               company,
+               category,
+               linkedin_url
+        FROM contacts
+        WHERE LOWER(job_title) = LOWER($1)
+          AND LOWER(company) = LOWER($2)
+        ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
+                 is_verified DESC,
+                 updated_at DESC
+        LIMIT 3
+      `;
+
+      const exactRows = await query(exactMatchSql, [jobTitle, company]);
+      results = exactRows.rows.map(r => ({
+        id: r.id,
+        firstName: r.first_name,
+        lastName: r.last_name,
+        jobTitle: r.job_title,
+        company: r.company,
+        category: r.category || null,
+        linkedinUrl: r.linkedin_url || null
+      }));
+
+      // Step 2: If we don't have 3 results, look for substring matches
+      if (results.length < 3) {
+        const remainingNeeded = 3 - results.length;
+        
+        // Get IDs of exact matches to exclude them from substring search
+        const excludeIds = results.map(r => r.id);
+        const excludeClause = excludeIds.length > 0 ? 'AND id NOT IN (' + excludeIds.map((_, i) => `$${i + 3}`).join(',') + ')' : '';
+        
+        const substringMatchSql = `
+          SELECT id,
+                 first_name,
+                 last_name,
+                 job_title,
+                 company,
+                 category,
+                 linkedin_url
+          FROM contacts
+          WHERE (
+            LOWER(job_title) LIKE LOWER($1) OR LOWER($1) LIKE LOWER(job_title)
+          ) AND (
+            LOWER(company) LIKE LOWER($2) OR LOWER($2) LIKE LOWER(company)
+          )
+          ${excludeClause}
+          ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
+                   is_verified DESC,
+                   updated_at DESC
+          LIMIT ${remainingNeeded}
+        `;
+
+        const params = [`%${jobTitle}%`, `%${company}%`, ...excludeIds];
+        const substringRows = await query(substringMatchSql, params);
+        
+        const substringResults = substringRows.rows.map(r => ({
+          id: r.id,
+          firstName: r.first_name,
+          lastName: r.last_name,
+          jobTitle: r.job_title,
+          company: r.company,
+          category: r.category || null,
+          linkedinUrl: r.linkedin_url || null
+        }));
+
+        results = results.concat(substringResults);
+      }
     }
 
+    console.log(`Search completed. Found ${results.length} results for jobTitle: "${jobTitle}", company: "${company}"`);
     return res.json({ results });
   } catch (err) {
     console.error('Search contacts error:', err);
