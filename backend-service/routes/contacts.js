@@ -759,6 +759,36 @@ router.post('/apollo-email-search', [
     return res.status(400).json({ error: 'At least one search parameter is required' });
   }
 
+  // Check user's Apollo API usage limit
+  const userId = req.user.id;
+  const APOLLO_USAGE_LIMIT = 5;
+
+  try {
+    // Get current Apollo API usage count
+    const userProfileSql = `SELECT apollo_api_calls FROM user_profiles WHERE user_id = $1`;
+    const { rows: userProfileRows } = await query(userProfileSql, [userId]);
+    
+    let currentUsage = 0;
+    if (userProfileRows.length > 0 && userProfileRows[0].apollo_api_calls !== null) {
+      currentUsage = userProfileRows[0].apollo_api_calls;
+    }
+
+    // Check if user has reached the limit
+    if (currentUsage >= APOLLO_USAGE_LIMIT) {
+      return res.status(403).json({
+        error: 'Usage limit exceeded',
+        message: 'You have reached your Apollo API usage limit. Please upgrade to get more calls.',
+        currentUsage,
+        limit: APOLLO_USAGE_LIMIT
+      });
+    }
+
+    console.log(`User ${userId} Apollo usage: ${currentUsage}/${APOLLO_USAGE_LIMIT}`);
+  } catch (usageCheckError) {
+    console.error('Error checking Apollo usage:', usageCheckError);
+    // Continue with the API call if usage check fails (fail open)
+  }
+
   try {
     // Apollo API configuration
     const apolloApiKey = process.env.APOLLO_API_KEY || 'Z8v_SYe2ByFcVLF3H1bfiA';
@@ -950,6 +980,22 @@ router.post('/apollo-email-search', [
         try { await client.query('ROLLBACK'); } catch (_) {}
       } finally {
         client.release();
+      }
+
+      // Increment Apollo API usage counter for successful email retrieval
+      try {
+        await query(`
+          INSERT INTO user_profiles (user_id, apollo_api_calls)
+          VALUES ($1, 1)
+          ON CONFLICT (user_id)
+          DO UPDATE SET
+            apollo_api_calls = COALESCE(user_profiles.apollo_api_calls, 0) + 1,
+            updated_at = NOW()
+        `, [userId]);
+        console.log(`Incremented Apollo usage for user ${userId}`);
+      } catch (incrementError) {
+        console.error('Error incrementing Apollo usage count:', incrementError);
+        // Don't fail the request if counter increment fails
       }
 
       return res.json({

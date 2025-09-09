@@ -318,3 +318,40 @@ router.post('/contacted', [
     return res.status(500).json({ error: 'FailedToUpdateContacted', message: 'Could not update contacted linkedins' });
   }
 });
+
+/**
+ * GET /api/user/apollo-usage
+ * Get current Apollo API usage count for the user
+ */
+router.get('/apollo-usage', async (req, res) => {
+  const userId = req.user.id;
+  const APOLLO_USAGE_LIMIT = 5;
+  
+  try {
+    const sql = `
+      SELECT apollo_api_calls
+      FROM user_profiles
+      WHERE user_id = $1
+    `;
+    const { rows } = await query(sql, [userId]);
+    
+    let currentUsage = 0;
+    if (rows.length > 0 && rows[0].apollo_api_calls !== null) {
+      currentUsage = rows[0].apollo_api_calls;
+    }
+    
+    return res.json({
+      success: true,
+      currentUsage,
+      limit: APOLLO_USAGE_LIMIT,
+      remaining: Math.max(0, APOLLO_USAGE_LIMIT - currentUsage),
+      hasReachedLimit: currentUsage >= APOLLO_USAGE_LIMIT
+    });
+  } catch (error) {
+    console.error('Error fetching Apollo usage:', error);
+    return res.status(500).json({ 
+      error: 'FailedToFetchUsage', 
+      message: 'Could not fetch Apollo usage information' 
+    });
+  }
+});
