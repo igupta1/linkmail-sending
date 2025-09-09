@@ -227,6 +227,161 @@ router.get('/facets', async (req, res) => {
 
 
 /**
+ * GET /api/contacts/search-similar
+ * Query: category, company
+ * Returns up to 3 contacts with prioritized search logic:
+ * 1) Same category + same company
+ * 2) Same company only (if < 3 results)
+ * 3) Same category only (if < 3 results)
+ * 4) Return whatever found (up to 3 total)
+ */
+router.get('/search-similar', async (req, res) => {
+  try {
+    const rawCategory = (req.query.category || '').toString();
+    const rawCompany = (req.query.company || '').toString();
+
+    const category = rawCategory.trim();
+    const company = rawCompany.trim();
+
+    if (!category || !company) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: 'Both category and company are required'
+      });
+    }
+
+    let results = [];
+
+    // Step 1: Search for people with same category AND same company
+    console.log(`Step 1: Searching by category: ${category} + company: ${company}`);
+    const categoryCompanySql = `
+      SELECT id,
+             first_name,
+             last_name,
+             job_title,
+             company,
+             category,
+             linkedin_url
+      FROM contacts
+      WHERE LOWER(category) = LOWER($1)
+        AND LOWER(company) = LOWER($2)
+      ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
+               is_verified DESC,
+               updated_at DESC
+      LIMIT 3
+    `;
+
+    const categoryCompanyRows = await query(categoryCompanySql, [category, company]);
+    results = categoryCompanyRows.rows.map(r => ({
+      id: r.id,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      jobTitle: r.job_title,
+      company: r.company,
+      category: r.category || null,
+      linkedinUrl: r.linkedin_url || null,
+      matchType: 'category_and_company'
+    }));
+
+    console.log(`Step 1 results: ${results.length}`);
+
+    // Step 2: If we don't have 3 results, search for same company only
+    if (results.length < 3) {
+      const remainingNeeded = 3 - results.length;
+      console.log(`Step 2: Need ${remainingNeeded} more. Searching by company only: ${company}`);
+      
+      // Get IDs of existing results to exclude them
+      const excludeIds = results.map(r => r.id);
+      const excludeClause = excludeIds.length > 0 ? 'AND id NOT IN (' + excludeIds.map((_, i) => `$${i + 2}`).join(',') + ')' : '';
+      
+      const companySql = `
+        SELECT id,
+               first_name,
+               last_name,
+               job_title,
+               company,
+               category,
+               linkedin_url
+        FROM contacts
+        WHERE LOWER(company) = LOWER($1)
+        ${excludeClause}
+        ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
+                 is_verified DESC,
+                 updated_at DESC
+        LIMIT ${remainingNeeded}
+      `;
+
+      const params = [company, ...excludeIds];
+      const companyRows = await query(companySql, params);
+      
+      const companyResults = companyRows.rows.map(r => ({
+        id: r.id,
+        firstName: r.first_name,
+        lastName: r.last_name,
+        jobTitle: r.job_title,
+        company: r.company,
+        category: r.category || null,
+        linkedinUrl: r.linkedin_url || null,
+        matchType: 'company_only'
+      }));
+
+      results = results.concat(companyResults);
+      console.log(`Step 2 results: ${companyResults.length}, total: ${results.length}`);
+    }
+
+    // Step 3: If we still don't have 3 results, search for same category only
+    if (results.length < 3) {
+      const remainingNeeded = 3 - results.length;
+      console.log(`Step 3: Need ${remainingNeeded} more. Searching by category only: ${category}`);
+      
+      // Get IDs of existing results to exclude them
+      const excludeIds = results.map(r => r.id);
+      const excludeClause = excludeIds.length > 0 ? 'AND id NOT IN (' + excludeIds.map((_, i) => `$${i + 2}`).join(',') + ')' : '';
+      
+      const categorySql = `
+        SELECT id,
+               first_name,
+               last_name,
+               job_title,
+               company,
+               category,
+               linkedin_url
+        FROM contacts
+        WHERE LOWER(category) = LOWER($1)
+        ${excludeClause}
+        ORDER BY (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
+                 is_verified DESC,
+                 updated_at DESC
+        LIMIT ${remainingNeeded}
+      `;
+
+      const params = [category, ...excludeIds];
+      const categoryRows = await query(categorySql, params);
+      
+      const categoryResults = categoryRows.rows.map(r => ({
+        id: r.id,
+        firstName: r.first_name,
+        lastName: r.last_name,
+        jobTitle: r.job_title,
+        company: r.company,
+        category: r.category || null,
+        linkedinUrl: r.linkedin_url || null,
+        matchType: 'category_only'
+      }));
+
+      results = results.concat(categoryResults);
+      console.log(`Step 3 results: ${categoryResults.length}, total: ${results.length}`);
+    }
+
+    console.log(`Search completed. Found ${results.length} results for category: "${category}", company: "${company}"`);
+    return res.json({ results });
+  } catch (err) {
+    console.error('Search similar contacts error:', err);
+    return res.status(500).json({ error: 'InternalError', message: 'Failed to search similar contacts' });
+  }
+});
+
+/**
  * GET /api/contacts/search
  * Query: jobTitle, company
  * Returns up to 3 contacts with name and linkedin url
