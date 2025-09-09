@@ -187,11 +187,11 @@ router.post('/', [
 
 /**
  * GET /api/contacts/facets
- * Return distinct job titles and companies for dropdowns, along with total count
+ * Return distinct job titles, companies, and categories for dropdowns, along with total count
  */
 router.get('/facets', async (req, res) => {
   try {
-    const [jobTitlesRes, companiesRes, countRes] = await Promise.all([
+    const [jobTitlesRes, companiesRes, categoriesRes, countRes] = await Promise.all([
       query(
         `SELECT DISTINCT ON (lower(job_title)) job_title
          FROM contacts
@@ -204,14 +204,21 @@ router.get('/facets', async (req, res) => {
          WHERE company IS NOT NULL AND length(trim(company)) > 0
          ORDER BY lower(company), company ASC`
       ),
+      query(
+        `SELECT DISTINCT category
+         FROM contacts
+         WHERE category IS NOT NULL AND length(trim(category)) > 0
+         ORDER BY category ASC`
+      ),
       query('SELECT COUNT(*) as total_contacts FROM contacts')
     ]);
 
     const jobTitles = jobTitlesRes.rows.map(r => r.job_title);
     const companies = companiesRes.rows.map(r => r.company);
+    const categories = categoriesRes.rows.map(r => r.category);
     const totalContacts = parseInt(countRes.rows[0].total_contacts);
 
-    res.json({ jobTitles, companies, totalContacts });
+    res.json({ jobTitles, companies, categories, totalContacts });
   } catch (err) {
     console.error('Facets error:', err);
     res.status(500).json({ error: 'InternalError', message: 'Failed to fetch facets' });
@@ -249,6 +256,7 @@ router.get('/search', async (req, res) => {
              last_name,
              job_title,
              company,
+             category,
              linkedin_url
       FROM contacts
       WHERE LOWER(job_title) = LOWER($1)
@@ -266,6 +274,7 @@ router.get('/search', async (req, res) => {
       lastName: r.last_name,
       jobTitle: r.job_title,
       company: r.company,
+      category: r.category || null,
       linkedinUrl: r.linkedin_url || null
     }));
 
@@ -283,6 +292,7 @@ router.get('/search', async (req, res) => {
                last_name,
                job_title,
                company,
+               category,
                linkedin_url
         FROM contacts
         WHERE (
@@ -306,6 +316,7 @@ router.get('/search', async (req, res) => {
         lastName: r.last_name,
         jobTitle: r.job_title,
         company: r.company,
+        category: r.category || null,
         linkedinUrl: r.linkedin_url || null
       }));
 
@@ -360,7 +371,7 @@ router.get('/email-by-linkedin', [
 
     // Find contact by normalized linkedin_url
     const contactSql = `
-      SELECT id, first_name, last_name, job_title, company, linkedin_url, is_verified
+      SELECT id, first_name, last_name, job_title, company, category, linkedin_url, is_verified
       FROM contacts
       WHERE linkedin_url IS NOT NULL
         AND length(trim(linkedin_url)) > 0
@@ -382,7 +393,7 @@ router.get('/email-by-linkedin', [
       }
 
       const byNameSql = `
-        SELECT id, first_name, last_name, job_title, company, linkedin_url, is_verified
+        SELECT id, first_name, last_name, job_title, company, category, linkedin_url, is_verified
         FROM contacts
         WHERE ${where}
         ORDER BY is_verified DESC, updated_at DESC
@@ -414,6 +425,7 @@ router.get('/email-by-linkedin', [
       lastName: contact.last_name,
       jobTitle: contact.job_title,
       company: contact.company,
+      category: contact.category || null,
       linkedinUrl: contact.linkedin_url,
       isVerifiedContact: contact.is_verified,
       email: bestEmail,
@@ -699,11 +711,11 @@ router.get('/autocomplete', async (req, res) => {
     const type = req.query.type;
     const searchQuery = (req.query.q || '').toString().trim();
 
-    if (!type || !['jobTitle', 'company'].includes(type)) {
+    if (!type || !['jobTitle', 'company', 'category'].includes(type)) {
       console.log('Invalid type parameter:', type);
       return res.status(400).json({
         error: 'ValidationError',
-        message: 'type must be either "jobTitle" or "company"'
+        message: 'type must be either "jobTitle", "company", or "category"'
       });
     }
 
@@ -729,7 +741,7 @@ router.get('/autocomplete', async (req, res) => {
           job_title ASC
         LIMIT 10
       `;
-    } else {
+    } else if (type === 'company') {
       sql = `
         SELECT DISTINCT company as value
         FROM contacts
@@ -740,6 +752,19 @@ router.get('/autocomplete', async (req, res) => {
           CASE WHEN LOWER(company) LIKE $2 THEN 0 ELSE 1 END,
           length(company) ASC,
           company ASC
+        LIMIT 10
+      `;
+    } else if (type === 'category') {
+      sql = `
+        SELECT DISTINCT category as value
+        FROM contacts
+        WHERE category IS NOT NULL 
+          AND length(trim(category)) > 0
+          AND LOWER(category) LIKE $1
+        ORDER BY 
+          CASE WHEN LOWER(category) LIKE $2 THEN 0 ELSE 1 END,
+          length(category) ASC,
+          category ASC
         LIMIT 10
       `;
     }
