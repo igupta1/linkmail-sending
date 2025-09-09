@@ -690,10 +690,17 @@ router.post('/apollo-email-search', [
  */
 router.get('/autocomplete', async (req, res) => {
   try {
+    console.log('Autocomplete request received:', { 
+      type: req.query.type, 
+      q: req.query.q, 
+      user: req.user?.email 
+    });
+    
     const type = req.query.type;
     const searchQuery = (req.query.q || '').toString().trim();
 
     if (!type || !['jobTitle', 'company'].includes(type)) {
+      console.log('Invalid type parameter:', type);
       return res.status(400).json({
         error: 'ValidationError',
         message: 'type must be either "jobTitle" or "company"'
@@ -701,56 +708,72 @@ router.get('/autocomplete', async (req, res) => {
     }
 
     if (!searchQuery || searchQuery.length < 1) {
+      console.log('Empty search query, returning empty suggestions');
       return res.json({ suggestions: [] });
     }
 
     let sql;
-    let columnName;
+    let params;
     
+    // Use simpler SQL approach similar to facets endpoint for better compatibility
     if (type === 'jobTitle') {
-      columnName = 'job_title';
       sql = `
         SELECT DISTINCT job_title as value
         FROM contacts
         WHERE job_title IS NOT NULL 
           AND length(trim(job_title)) > 0
-          AND LOWER(job_title) LIKE LOWER($1)
+          AND LOWER(job_title) LIKE $1
         ORDER BY 
-          CASE WHEN LOWER(job_title) LIKE LOWER($2) THEN 0 ELSE 1 END,
-          length(job_title),
+          CASE WHEN LOWER(job_title) LIKE $2 THEN 0 ELSE 1 END,
+          length(job_title) ASC,
           job_title ASC
         LIMIT 10
       `;
     } else {
-      columnName = 'company';
       sql = `
         SELECT DISTINCT company as value
         FROM contacts
         WHERE company IS NOT NULL 
           AND length(trim(company)) > 0
-          AND LOWER(company) LIKE LOWER($1)
+          AND LOWER(company) LIKE $1
         ORDER BY 
-          CASE WHEN LOWER(company) LIKE LOWER($2) THEN 0 ELSE 1 END,
-          length(company),
+          CASE WHEN LOWER(company) LIKE $2 THEN 0 ELSE 1 END,
+          length(company) ASC,
           company ASC
         LIMIT 10
       `;
     }
 
-    // First parameter: contains search query (for broader matching)
-    // Second parameter: starts with search query (for priority ordering)
-    const containsPattern = `%${searchQuery}%`;
-    const startsWithPattern = `${searchQuery}%`;
+    // Prepare parameters with proper escaping
+    const searchLower = searchQuery.toLowerCase();
+    const containsPattern = `%${searchLower}%`;
+    const startsWithPattern = `${searchLower}%`;
+    params = [containsPattern, startsWithPattern];
+
+    console.log('Executing SQL query for type:', type);
+    console.log('SQL:', sql.replace(/\s+/g, ' ').trim());
+    console.log('Query parameters:', params);
     
-    const result = await query(sql, [containsPattern, startsWithPattern]);
+    const result = await query(sql, params);
+    console.log('Query result:', { rowCount: result.rows.length });
+    
     const suggestions = result.rows.map(row => row.value);
 
+    console.log('Returning suggestions:', suggestions.slice(0, 3)); // Log first 3 for debugging
     res.json({ suggestions });
   } catch (err) {
-    console.error('Autocomplete error:', err);
+    console.error('Autocomplete error details:', {
+      message: err.message,
+      stack: err.stack,
+      code: err.code,
+      sqlState: err.sqlState,
+      type: req.query.type,
+      query: req.query.q
+    });
     res.status(500).json({ 
       error: 'InternalError', 
-      message: 'Failed to fetch autocomplete suggestions' 
+      message: 'Failed to fetch autocomplete suggestions',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 });
