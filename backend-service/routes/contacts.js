@@ -683,4 +683,76 @@ router.post('/apollo-email-search', [
   }
 });
 
+/**
+ * GET /api/contacts/autocomplete
+ * Query: type (jobTitle|company), q (search query)
+ * Returns autocomplete suggestions for job titles or companies
+ */
+router.get('/autocomplete', async (req, res) => {
+  try {
+    const type = req.query.type;
+    const searchQuery = (req.query.q || '').toString().trim();
+
+    if (!type || !['jobTitle', 'company'].includes(type)) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: 'type must be either "jobTitle" or "company"'
+      });
+    }
+
+    if (!searchQuery || searchQuery.length < 1) {
+      return res.json({ suggestions: [] });
+    }
+
+    let sql;
+    let columnName;
+    
+    if (type === 'jobTitle') {
+      columnName = 'job_title';
+      sql = `
+        SELECT DISTINCT job_title as value
+        FROM contacts
+        WHERE job_title IS NOT NULL 
+          AND length(trim(job_title)) > 0
+          AND LOWER(job_title) LIKE LOWER($1)
+        ORDER BY 
+          CASE WHEN LOWER(job_title) LIKE LOWER($2) THEN 0 ELSE 1 END,
+          length(job_title),
+          job_title ASC
+        LIMIT 10
+      `;
+    } else {
+      columnName = 'company';
+      sql = `
+        SELECT DISTINCT company as value
+        FROM contacts
+        WHERE company IS NOT NULL 
+          AND length(trim(company)) > 0
+          AND LOWER(company) LIKE LOWER($1)
+        ORDER BY 
+          CASE WHEN LOWER(company) LIKE LOWER($2) THEN 0 ELSE 1 END,
+          length(company),
+          company ASC
+        LIMIT 10
+      `;
+    }
+
+    // First parameter: contains search query (for broader matching)
+    // Second parameter: starts with search query (for priority ordering)
+    const containsPattern = `%${searchQuery}%`;
+    const startsWithPattern = `${searchQuery}%`;
+    
+    const result = await query(sql, [containsPattern, startsWithPattern]);
+    const suggestions = result.rows.map(row => row.value);
+
+    res.json({ suggestions });
+  } catch (err) {
+    console.error('Autocomplete error:', err);
+    res.status(500).json({ 
+      error: 'InternalError', 
+      message: 'Failed to fetch autocomplete suggestions' 
+    });
+  }
+});
+
 module.exports = router;
