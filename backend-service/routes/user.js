@@ -325,7 +325,7 @@ router.post('/contacted', [
  */
 router.get('/apollo-usage', async (req, res) => {
   const userId = req.user.id;
-  const APOLLO_USAGE_LIMIT = 5;
+  const APOLLO_USAGE_LIMIT = 50;
   
   try {
     const sql = `
