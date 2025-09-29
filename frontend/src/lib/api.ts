@@ -127,6 +127,29 @@ class ApiClient {
       body: JSON.stringify(contactData),
     });
   }
+
+  // Connections endpoints
+  async getConnections() {
+    return this.request('/api/connections');
+  }
+
+  async getConnection(contactId: number) {
+    return this.request(`/api/connections/${contactId}`);
+  }
+
+  async updateConnectionStatus(contactId: number, status: string) {
+    return this.request(`/api/connections/${contactId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async updateConnectionNotes(contactId: number, notes: string) {
+    return this.request(`/api/connections/${contactId}/notes`, {
+      method: 'PUT',
+      body: JSON.stringify({ notes }),
+    });
+  }
 }
 
 // Create singleton instance

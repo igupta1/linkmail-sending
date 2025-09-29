@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { Menu, X, Home, User, Mail, Users, FileText, PanelLeftClose, PanelLeftOpen, PanelLeft, LayoutDashboard, SquareUserRound } from 'lucide-react';
+import { Menu, X, Home, User, Mail, Users, FileText, PanelLeftClose, PanelLeftOpen, PanelLeft, LayoutDashboard, SquareUserRound, MessageSquare } from 'lucide-react';
 import { LoginButton } from './LoginButton';
 
 interface SidebarProps {
@@ -16,6 +16,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
   const navigation = [
     { name: 'Overview', href: '/dashboard', icon: Home },
     { name: 'Profile', href: '/dashboard/profile', icon: SquareUserRound },
+    { name: 'Connections', href: '/dashboard/connections', icon: MessageSquare },
     { name: 'Contacts', href: '/dashboard/contacts', icon: Users },
     { name: 'Templates', href: '/dashboard/templates', icon: FileText },
     { name: 'Emails', href: '/dashboard/emails', icon: Mail },

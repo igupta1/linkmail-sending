@@ -12,6 +12,7 @@ const emailRoutes = require('./routes/email');
 const userRoutes = require('./routes/user');
 const { authenticateToken } = require('./middleware/auth');
 const contactsRoutes = require('./routes/contacts');
+const { router: connectionsRoutes } = require('./routes/connections');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -89,6 +90,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/email', authenticateToken, emailRoutes);
 app.use('/api/user', authenticateToken, userRoutes);
 app.use('/api/contacts', authenticateToken, contactsRoutes);
+app.use('/api/connections', authenticateToken, connectionsRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

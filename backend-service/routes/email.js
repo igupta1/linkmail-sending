@@ -4,9 +4,77 @@ const express = require('express');
 const { google } = require('googleapis');
 const { body, validationResult } = require('express-validator');
 const { getUserSession, setUserSession } = require('../store');
-const { getClient } = require('../db');
+const { getClient, query } = require('../db');
+const { findOrCreateConnection, addMessageToConnection } = require('./connections');
 
 const router = express.Router();
+
+/**
+ * Find or create contact by email address
+ * @param {string} email - Email address
+ * @param {Object} contactInfo - Additional contact information
+ * @returns {Object} Contact object
+ */
+async function findOrCreateContactByEmail(email, contactInfo = {}) {
+  const client = await getClient();
+  
+  try {
+    // First, try to find existing contact by email
+    const findContactSql = `
+      SELECT c.* FROM contacts c
+      JOIN contact_emails ce ON c.id = ce.contact_id
+      WHERE ce.email = $1
+      ORDER BY c.updated_at DESC
+      LIMIT 1
+    `;
+    const { rows: existingContacts } = await client.query(findContactSql, [email]);
+    
+    if (existingContacts.length > 0) {
+      return existingContacts[0];
+    }
+    
+    // Create new contact if not found
+    await client.query('BEGIN');
+    
+    const insertContactSql = `
+      INSERT INTO contacts (first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `;
+    
+    const { rows: newContacts } = await client.query(insertContactSql, [
+      contactInfo.firstName || null,
+      contactInfo.lastName || null,
+      contactInfo.jobTitle || null,
+      contactInfo.company || null,
+      contactInfo.city || null,
+      contactInfo.state || null,
+      contactInfo.country || null,
+      false, // not verified by default
+      contactInfo.linkedinUrl || null
+    ]);
+    
+    const newContact = newContacts[0];
+    
+    // Add email to contact
+    const insertEmailSql = `
+      INSERT INTO contact_emails (contact_id, email, is_primary, is_verified)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `;
+    
+    await client.query(insertEmailSql, [newContact.id, email, true, false]);
+    
+    await client.query('COMMIT');
+    return newContact;
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 
 /**
  * Get authenticated Gmail client for user
@@ -183,9 +251,26 @@ router.post('/send', [
       }
     });
 
-    // Contact creation removed - no longer auto-creating contacts when sending emails
+    // Find or create contact and connection
+    const contact = await findOrCreateContactByEmail(to, contactInfo);
+    const connection = await findOrCreateConnection(userId, contact.id, subject);
+    
+    // Create message object for the connection
+    const message = {
+      direction: 'sent',
+      subject,
+      body,
+      attachments: attachments.map(a => ({ name: a.name, size: a.size, type: a.type })),
+      sent_at: new Date().toISOString(),
+      gmail_message_id: sendResponse.data.id,
+      gmail_thread_id: sendResponse.data.threadId,
+      is_follow_up: false
+    };
+    
+    // Add message to connection
+    await addMessageToConnection(userId, contact.id, message);
 
-    // Save email to user's history
+    // Save email to user's history (keeping existing functionality)
     if (!userSession.emailHistory) {
       userSession.emailHistory = [];
     }
@@ -198,7 +283,9 @@ router.post('/send', [
       body,
       attachments: attachments.map(a => ({ name: a.name, size: a.size, type: a.type })),
       sentAt: new Date().toISOString(),
-      gmailMessageId: sendResponse.data.id
+      gmailMessageId: sendResponse.data.id,
+      contactId: contact.id,
+      connectionId: `${userId}_${contact.id}`
     };
 
     userSession.emailHistory.push(emailRecord);

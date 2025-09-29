@@ -263,7 +263,17 @@ router.put('/bio', [
 
   const experiencesJson = Array.isArray(experiences) ? JSON.stringify(experiences) : JSON.stringify([]);
   const skillsArray = Array.isArray(skills) ? skills : [];
-  const templatesJson = Array.isArray(templates) ? JSON.stringify(templates.map(t => ({ title: t.title || t.name || '', body: t.body || t.content || '' }))) : JSON.stringify([]);
+  const templatesJson = Array.isArray(templates)
+    ? JSON.stringify(
+        templates.map(t => ({
+          icon: typeof t.icon === 'string' && t.icon.trim().length > 0 ? t.icon.trim() : '📝',
+          title: t.title || t.name || '',
+          body: t.body || t.content || '',
+          fileUrl: typeof t.fileUrl === 'string' && t.fileUrl.trim().length > 0 ? t.fileUrl.trim() : null,
+          strict_template: typeof t.strict_template === 'boolean' ? t.strict_template : false
+        }))
+      )
+    : JSON.stringify([]);
 
   try {
     const upsertSql = `

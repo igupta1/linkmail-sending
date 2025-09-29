@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check } from 'lucide-react';
+import { Check, ArrowUpRight, Plus, Trash, Cross, X } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -94,19 +94,9 @@ export default function ProfilePage() {
       };
       
       console.log('Sending profile data:', cleanedData);
-      const response = await apiClient.updateUserBio(cleanedData);
-      
-      if (response.success && response.data && typeof response.data === 'object' && 'success' in response.data) {
-        const data = response.data as { success: boolean; profile: UserProfile };
-        if (data.success) {
-          // Profile will be updated by the hook automatically
-          alert('Profile updated successfully!');
-        } else {
-          alert('Failed to save profile: Server returned error');
-        }
-      } else {
-        console.error('API Error:', response);
-        alert('Failed to save profile: ' + (response.error || 'Unknown error'));
+      const result = await updateProfile(cleanedData as Partial<UserProfile>);
+      if (!result.success) {
+        alert('Failed to save profile: ' + (result.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error saving profile:', error);
@@ -234,6 +224,38 @@ export default function ProfilePage() {
   }
 
   const setupStatus = getProfileSetupStatus();
+  
+  // Show save button only when there are actual changes
+  const hasChanges = (() => {
+    if (!profile) return false;
+    const initialData = {
+      firstName: profile.first_name || '',
+      lastName: profile.last_name || '',
+      linkedinUrl: profile.linkedin_url || '',
+      experiences: profile.experiences || [],
+      skills: profile.skills || [],
+      school: profile.school || '',
+      preferences: profile.preferences || {}
+    };
+    const normalize = (data: any) => ({
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      linkedinUrl: data.linkedinUrl || '',
+      experiences: (data.experiences || []).map((exp: any) => ({
+        title: exp.title || '',
+        company: exp.company || '',
+        duration: exp.duration || ''
+      })),
+      skills: (data.skills || []).slice(),
+      school: data.school || '',
+      preferences: data.preferences && Object.keys(data.preferences).length > 0 ? data.preferences : {}
+    });
+    try {
+      return JSON.stringify(normalize(formData)) !== JSON.stringify(normalize(initialData));
+    } catch {
+      return true;
+    }
+  })();
 
   return (
     <div className="max-w-4xl mx-auto py-6 px-6 mt-[100px]">
@@ -289,7 +311,7 @@ export default function ProfilePage() {
                   disabled
                   value={formData.firstName}
                   onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
@@ -301,22 +323,33 @@ export default function ProfilePage() {
                   disabled
                   value={formData.lastName}
                   onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
 
             {/* LinkedIn URL */}
             <div>
-              <label className="block text-sm font-normal text-gray-600 mb-3">
-                Your LinkedIn
-              </label>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-normal text-gray-600">
+                  Your LinkedIn
+                </label>
+                <a
+                  href={formData.linkedinUrl ? formData.linkedinUrl : 'https://www.linkedin.com/'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100`}
+                >
+                  Open LinkedIn
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </a>
+              </div>
               <input
                 type="url"
                 value={formData.linkedinUrl}
                 onChange={(e) => handleInputChange('linkedinUrl', e.target.value)}
                 placeholder="https://linkedin.com/in/albert-einstein"
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -333,7 +366,7 @@ export default function ProfilePage() {
                   onBlur={handleCollegeBlur}
                   onFocus={() => formData.school.length > 1 && setShowCollegeDropdown(true)}
                   placeholder="Start typing to search colleges..."
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 
                 {/* Dropdown */}
@@ -394,13 +427,13 @@ export default function ProfilePage() {
                 {formData.skills.map((skill, index) => (
                   <div
                     key={index}
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-800 rounded-xl text-sm font-medium"
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-gray-200 text-gray-800 rounded-xl text-sm font-medium"
                   >
                     <span>{skill}</span>
                     <button
                       type="button"
                       onClick={() => removeSkill(index)}
-                      className="ml-1 text-blue-600 hover:text-blue-800 focus:outline-none cursor-pointer"
+                      className="ml-1 text-gray-400 hover:text-gray-800 focus:outline-none cursor-pointer"
                       aria-label={`Remove ${skill}`}
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -417,7 +450,7 @@ export default function ProfilePage() {
                     value={newSkill}
                     onChange={handleSkillInputChange}
                     onKeyPress={handleKeyPress}
-                    placeholder={formData.skills.length === 0 ? "e.g. Javascript" : "Add another skill..."}
+                    placeholder={formData.skills.length === 0 ? "e.g. Javascript" : "Another Skill"}
                     className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-out"
                     style={{ width: `${inputWidth}px` }}
                   />
@@ -464,52 +497,81 @@ export default function ProfilePage() {
 
             {/* Work Experience */}
             <div>
-              <label className="block text-sm font-normal text-gray-600 mb-3">
-                Where have you worked?
-              </label>
-              <div className="space-y-3">
-                {formData.experiences.map((exp, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
-                      <input
-                        type="text"
-                        value={exp.title || ''}
-                        onChange={(e) => updateExperience(index, 'title', e.target.value)}
-                        placeholder="Job Title"
-                        className="px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <input
-                        type="text"
-                        value={exp.company || ''}
-                        onChange={(e) => updateExperience(index, 'company', e.target.value)}
-                        placeholder="Company"
-                        className="px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      value={exp.duration || ''}
-                      onChange={(e) => updateExperience(index, 'duration', e.target.value)}
-                      placeholder="Duration (e.g., Jan 2020 - Present)"
-                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeExperience(index)}
-                      className="text-sm text-red-600 hover:text-red-800"
-                    >
-                      Remove Experience
-                    </button>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-3">
+                <label className="block mb-3 text-sm font-normal text-gray-600">
+                  Where have you worked?
+                </label>
+                {formData.experiences.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={addExperience}
+                    className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-blue-50 cursor-pointer border border-blue-200  text-blue-600 hover:bg-blue-50 focus:outline-none"
+                    aria-label="Add Experience"
+                  >
+                    <Plus className="w-3 h-3" /> <span className="text-xs font-medium">New Experience</span>
+                  </button>
+                )}
+              </div>
+              {formData.experiences.length === 0 ? (
                 <button
                   type="button"
                   onClick={addExperience}
-                  className="text-sm text-blue-600 hover:text-blue-800"
+                  className="w-full px-3 py-2 bg-white border border-dashed border-gray-300 rounded-lg text-left text-sm text-gray-500 hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-all duration-200 ease-out"
+                  aria-label="Add First Experience"
                 >
-                  + Add Experience
+                  <span className="inline-flex items-center gap-2">
+                    <Plus className="w-4 h-4 text-gray-400" />
+                    Add Experience
+                  </span>
                 </button>
-              </div>
+              ) : (
+                <div className="space-y-3">
+                  {formData.experiences.map((exp, index) => (
+                    <div key={index} className="relative border border-gray-200 rounded-lg p-4">
+                      <button
+                        type="button"
+                        onClick={() => removeExperience(index)}
+                        className="absolute top-2 right-2 p-1 text-slate-500 rounded-md hover:bg-gray-100 focus:outline-none cursor-pointer"
+                        aria-label="Remove Experience"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-2">Company</label>
+                          <input
+                            type="text"
+                            value={exp.company || ''}
+                            onChange={(e) => updateExperience(index, 'company', e.target.value)}
+                            placeholder="Linkmail Co."
+                            className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-2">Title</label>
+                          <input
+                            type="text"
+                            value={exp.title || ''}
+                            onChange={(e) => updateExperience(index, 'title', e.target.value)}
+                            placeholder="Chief Snack Officer"
+                            className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-2 mt-4">Details</label>
+                        <textarea
+                          value={exp.duration || ''}
+                          onChange={(e) => updateExperience(index, 'duration', e.target.value)}
+                          placeholder="A/B tested chip-to-dip ratios; increased crunch satisfaction by 42%"
+                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Preferences */}
@@ -578,15 +640,25 @@ export default function ProfilePage() {
             </div> */}
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-4">
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                {isSaving ? 'Saving...' : 'Save Profile'}
-              </button>
-            </div>
+            <AnimatePresence initial={false}>
+              {hasChanges && (
+                <motion.div
+                  initial={{ y: -20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -20, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+                  className="flex gap-3 pt-4 items-end justify-end overflow-hidden"
+                >
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-full cursor-pointer text-sm font-medium transition-colors"
+                  >
+                    {isSaving ? 'Saving...' : 'Save Profile'}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </div>
