@@ -20,10 +20,13 @@ async function getGmailClient(userId) {
     throw new Error('User session not found or no Google tokens available');
   }
 
+  // Use environment variable or default to localhost for development
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback';
+  
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    redirectUri
   );
 
   oauth2Client.setCredentials(userSession.googleTokens);

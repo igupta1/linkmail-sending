@@ -21,10 +21,14 @@ const {
  * Initialize Google OAuth2 client
  */
 function getOAuth2Client() {
+  // OAuth redirect URI should point to the backend callback endpoint
+  // The backend will then redirect to the frontend with the token
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback';
+  
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    redirectUri
   );
 }
 
@@ -63,7 +67,13 @@ router.get('/google/callback', async (req, res) => {
   }
 
   try {
-    const oauth2Client = getOAuth2Client();
+    // Create OAuth client with same configuration as the initial request
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback'
+    );
+    
     const { tokens } = await oauth2Client.getToken(code);
     
     oauth2Client.setCredentials(tokens);

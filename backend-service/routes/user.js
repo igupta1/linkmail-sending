@@ -207,6 +207,8 @@ router.get('/bio', async (req, res) => {
              skills,
              templates,
              contacted_linkedins,
+             school,
+             preferences,
              created_at,
              updated_at
       FROM user_profiles
@@ -237,28 +239,36 @@ router.put('/bio', [
   body('experiences').optional().isArray(),
   body('skills').optional().isArray(),
   body('templates').optional().isArray(),
+  body('school').optional().isString().trim(),
+  body('preferences').optional().custom((value) => {
+    if (value === null || value === undefined) return true;
+    return typeof value === 'object' && value !== null;
+  }),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.error('Validation errors:', errors.array());
     return res.status(400).json({ error: 'ValidationFailed', details: errors.array() });
   }
 
   const userId = req.user.id;
-  const { firstName, lastName, linkedinUrl, experiences, skills, templates } = req.body;
+  const { firstName, lastName, linkedinUrl, experiences, skills, templates, school, preferences } = req.body;
 
   // Treat omitted fields as null so COALESCE preserves existing values
   const sanitizedFirstName = typeof firstName === 'string' && firstName.trim().length > 0 ? firstName.trim() : null;
   const sanitizedLastName = typeof lastName === 'string' && lastName.trim().length > 0 ? lastName.trim() : null;
   const sanitizedLinkedIn = typeof linkedinUrl === 'string' && linkedinUrl.trim().length > 0 ? linkedinUrl.trim() : null;
+  const sanitizedSchool = typeof school === 'string' && school.trim().length > 0 ? school.trim() : null;
+  const sanitizedPreferences = typeof preferences === 'object' && preferences !== null ? JSON.stringify(preferences) : null;
 
-  const experiencesJson = Array.isArray(experiences) ? JSON.stringify(experiences) : null;
-  const skillsArray = Array.isArray(skills) ? skills : null;
-  const templatesJson = Array.isArray(templates) ? JSON.stringify(templates.map(t => ({ title: t.title || t.name || '', body: t.body || t.content || '' }))) : null;
+  const experiencesJson = Array.isArray(experiences) ? JSON.stringify(experiences) : JSON.stringify([]);
+  const skillsArray = Array.isArray(skills) ? skills : [];
+  const templatesJson = Array.isArray(templates) ? JSON.stringify(templates.map(t => ({ title: t.title || t.name || '', body: t.body || t.content || '' }))) : JSON.stringify([]);
 
   try {
     const upsertSql = `
-      INSERT INTO user_profiles (user_id, first_name, last_name, linkedin_url, experiences, skills, templates)
-      VALUES ($1, $2, $3, $4, $5::jsonb, $6::text[], $7::jsonb)
+      INSERT INTO user_profiles (user_id, first_name, last_name, linkedin_url, experiences, skills, templates, school, preferences)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6::text[], $7::jsonb, $8, $9::jsonb)
       ON CONFLICT (user_id)
       DO UPDATE SET
         first_name = COALESCE(EXCLUDED.first_name, user_profiles.first_name),
@@ -267,8 +277,10 @@ router.put('/bio', [
         experiences = COALESCE(EXCLUDED.experiences, user_profiles.experiences),
         skills = COALESCE(EXCLUDED.skills, user_profiles.skills),
         templates = COALESCE(EXCLUDED.templates, user_profiles.templates),
+        school = COALESCE(EXCLUDED.school, user_profiles.school),
+        preferences = COALESCE(EXCLUDED.preferences, user_profiles.preferences),
         updated_at = NOW()
-      RETURNING user_id, first_name, last_name, linkedin_url, experiences, skills, templates, contacted_linkedins, created_at, updated_at
+      RETURNING user_id, first_name, last_name, linkedin_url, experiences, skills, templates, contacted_linkedins, school, preferences, created_at, updated_at
     `;
     const { rows } = await query(upsertSql, [
       userId,
@@ -277,7 +289,9 @@ router.put('/bio', [
       sanitizedLinkedIn,
       experiencesJson,
       skillsArray,
-      templatesJson
+      templatesJson,
+      sanitizedSchool,
+      sanitizedPreferences
     ]);
     return res.json({ success: true, profile: rows[0] });
   } catch (error) {
@@ -309,7 +323,7 @@ router.post('/contacted', [
           SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(user_profiles.contacted_linkedins, '{}') || ARRAY[LOWER(EXCLUDED.contacted_linkedins[1])]))
         ),
         updated_at = NOW()
-      RETURNING user_id, first_name, last_name, linkedin_url, experiences, skills, contacted_linkedins, created_at, updated_at
+      RETURNING user_id, first_name, last_name, linkedin_url, experiences, skills, contacted_linkedins, school, preferences, created_at, updated_at
     `;
     const { rows } = await query(updateSql, [userId, linkedinUrl]);
     return res.json({ success: true, profile: rows[0] });
