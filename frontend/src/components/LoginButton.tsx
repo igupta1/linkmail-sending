@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { getOAuthUrl } from '@/lib/api';
+import { Settings } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface LoginButtonProps {
   expanded?: boolean;
@@ -10,6 +12,7 @@ interface LoginButtonProps {
 
 export function LoginButton({ expanded = false }: LoginButtonProps) {
   const { isAuthenticated, user, logout } = useAuth();
+  const router = useRouter();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{
     vertical: 'top' | 'bottom';
@@ -139,6 +142,16 @@ export function LoginButton({ expanded = false }: LoginButtonProps) {
               <p className="text-sm font-medium text-gray-900">{user.name}</p>
               <p className="text-sm text-gray-500 truncate">{user.email}</p>
             </div>
+            <button
+              onClick={() => {
+                router.push('/dashboard/settings');
+                setIsDropdownOpen(false);
+              }}
+              className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <Settings className="w-4 h-4 mr-3" />
+              Settings
+            </button>
             <button
               onClick={() => {
                 logout();

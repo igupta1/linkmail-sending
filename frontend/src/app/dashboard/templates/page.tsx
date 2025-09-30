@@ -104,7 +104,7 @@ export default function TemplatesPage() {
     <div className="max-w-5xl mx-auto py-6 px-6 mt-[100px]">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-newsreader-500 text-gray-900">Your Templates</h1>
+          <h1 className="text-4xl font-newsreader-500 text-primary">Your Templates</h1>
           <p className="mt-2 text-[15px] max-w-xl text-stone-500">Save and reuse outreach drafts for different purposes. Linkmail will base responses off of these templates.</p>
         </div>
         <button
@@ -118,7 +118,7 @@ export default function TemplatesPage() {
       {templates.length === 0 ? (
         <div className="bg-transparent border border-black/10 rounded-2xl p-10 text-center">
           <div className="mx-auto w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4">📝</div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No templates yet</h3>
+          <h3 className="text-lg font-medium text-primary mb-2">No templates yet</h3>
           <p className="text-sm text-gray-600 mb-4">Create your first template to speed up outreach.</p>
           <button
             onClick={() => openEditor(null)}
@@ -179,7 +179,7 @@ export default function TemplatesPage() {
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h3 className="text-xl font-semibold text-gray-900">{selectedIndex === null ? 'New Template' : 'Edit Template'}</h3>
+                    <h3 className="text-xl font-semibold text-primary">{selectedIndex === null ? 'New Template' : 'Edit Template'}</h3>
                     <p className="text-sm text-gray-500 mt-1">Use placeholders like [Recipient Name].</p>
                   </div>
                   <button onClick={closeEditor} className="p-2 rounded-lg hover:bg-gray-100 cursor-pointer">

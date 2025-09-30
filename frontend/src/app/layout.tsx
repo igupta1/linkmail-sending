@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Newsreader } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { Providers } from "./providers";
 
 const newsreader = Newsreader({
   variable: "--font-newsreader",
@@ -24,9 +24,9 @@ export default function RootLayout({
       <body
         className={`${newsreader.variable} antialiased`}
       >
-        <AuthProvider>
+        <Providers>
           {children}
-        </AuthProvider>
+        </Providers>
       </body>
     </html>
   );

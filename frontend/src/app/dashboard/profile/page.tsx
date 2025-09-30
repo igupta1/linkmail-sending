@@ -258,14 +258,14 @@ export default function ProfilePage() {
   })();
 
   return (
-    <div className="max-w-4xl mx-auto py-6 px-6 mt-[100px]">
+    <div className="max-w-4xl mx-auto py-6 px-6 mt-[100px] bg-background">
       <div className="mb-8">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h1 className="text-4xl font-newsreader-500 text-gray-900">
+            <h1 className="text-4xl font-newsreader-500 text-primary">
               Getting to know you.
             </h1>
-            <p className="mt-4 text-[15px] max-w-lg text-stone-500">
+            <p className="mt-4 text-[15px] max-w-lg text-secondary">
               Information about your profile and professional background. This will be used by Linkmail to craft the most personalized emails for you.
             </p>
           </div>
@@ -296,14 +296,14 @@ export default function ProfilePage() {
       </div>
 
       {/* Profile Form */}
-      <div className="bg-transparent border border-black/10 rounded-2xl">
+      <div className="bg-background border border-border rounded-2xl">
         <div className="p-8 sm:p-6">
 
           <div className="space-y-6 p-4">
             {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-normal text-gray-600 mb-3">
+                <label className="block text-sm font-normal text-secondary mb-3">
                   First Name
                 </label>
                 <input
@@ -311,11 +311,11 @@ export default function ProfilePage() {
                   disabled
                   value={formData.firstName}
                   onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm bg-foreground border border-border rounded-lg opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-primary placeholder:text-tertiary"
                 />
               </div>
               <div>
-                <label className="block text-sm antialiased text-gray-600 mb-3">
+                <label className="block text-sm antialiased text-secondary mb-3">
                   Last Name
                 </label>
                 <input
@@ -323,7 +323,7 @@ export default function ProfilePage() {
                   disabled
                   value={formData.lastName}
                   onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm bg-foreground border border-border rounded-lg opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-primary placeholder:text-tertiary"
                 />
               </div>
             </div>
@@ -331,14 +331,14 @@ export default function ProfilePage() {
             {/* LinkedIn URL */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-normal text-gray-600">
+                <label className="block text-sm font-normal text-secondary">
                   Your LinkedIn
                 </label>
                 <a
                   href={formData.linkedinUrl ? formData.linkedinUrl : 'https://www.linkedin.com/'}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100`}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-border transition-colors text-blue-700 bg-blue-50 hover:bg-blue-100`}
                 >
                   Open LinkedIn
                   <ArrowUpRight className="w-3.5 h-3.5" />
@@ -349,13 +349,13 @@ export default function ProfilePage() {
                 value={formData.linkedinUrl}
                 onChange={(e) => handleInputChange('linkedinUrl', e.target.value)}
                 placeholder="https://linkedin.com/in/albert-einstein"
-                className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 text-sm bg-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-primary placeholder:text-tertiary"
               />
             </div>
 
             {/* School */}
             <div className="relative">
-              <label className="block text-sm font-normal text-gray-600 mb-3">
+              <label className="block text-sm font-normal text-secondary mb-3">
                 School/University
               </label>
               <div className="relative">
@@ -366,7 +366,7 @@ export default function ProfilePage() {
                   onBlur={handleCollegeBlur}
                   onFocus={() => formData.school.length > 1 && setShowCollegeDropdown(true)}
                   placeholder="Start typing to search colleges..."
-                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm bg-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-primary placeholder:text-tertiary"
                 />
                 
                 {/* Dropdown */}
@@ -384,7 +384,7 @@ export default function ProfilePage() {
                         stiffness: 300,
                         damping: 30
                       }}
-                      className="absolute z-10 w-full mt-2 bg-white/10 backdrop-blur-lg p-2 border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                      className="absolute z-10 w-full mt-2 bg-foreground/90 backdrop-blur-lg p-2 border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto"
                     >
                       {filteredColleges.map((college, index) => (
                         <motion.div
@@ -396,15 +396,15 @@ export default function ProfilePage() {
                             delay: index * 0.02,
                             ease: "easeOut"
                           }}
-                          className="px-3 py-2 hover:bg-black/5 rounded-lg cursor-pointer"
+                          className="px-3 py-2 hover:bg-hover rounded-lg cursor-pointer"
                           onClick={() => selectCollege(college)}
                           whileHover={{ 
                             transition: { duration: 0.1 }
                           }}
                           whileTap={{ scale: 0.98 }}
                         >
-                          <div className="font-medium text-gray-900">{formatCollegeName(college.name)}</div>
-                          <div className="text-sm text-gray-500">
+                          <div className="font-medium text-primary">{formatCollegeName(college.name)}</div>
+                          <div className="text-sm text-tertiary">
                             {formatCollegeName(college.city)}, {college.state}
                           </div>
                         </motion.div>
@@ -417,7 +417,7 @@ export default function ProfilePage() {
 
             {/* Skills */}
             <div>
-              <label className="block text-sm font-normal text-gray-600 mb-3">
+              <label className="block text-sm font-normal text-secondary mb-3">
                 What are your skills?
               </label>
               
@@ -427,13 +427,13 @@ export default function ProfilePage() {
                 {formData.skills.map((skill, index) => (
                   <div
                     key={index}
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-gray-200 text-gray-800 rounded-xl text-sm font-medium"
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-selection text-primary rounded-xl text-sm font-medium"
                   >
                     <span>{skill}</span>
                     <button
                       type="button"
                       onClick={() => removeSkill(index)}
-                      className="ml-1 text-gray-400 hover:text-gray-800 focus:outline-none cursor-pointer"
+                      className="ml-1 text-tertiary hover:text-primary focus:outline-none cursor-pointer"
                       aria-label={`Remove ${skill}`}
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -451,7 +451,7 @@ export default function ProfilePage() {
                     onChange={handleSkillInputChange}
                     onKeyPress={handleKeyPress}
                     placeholder={formData.skills.length === 0 ? "e.g. Javascript" : "Another Skill"}
-                    className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-out"
+                    className="px-3 py-2 bg-foreground border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 ease-out text-primary placeholder:text-tertiary"
                     style={{ width: `${inputWidth}px` }}
                   />
                   <AnimatePresence>
@@ -498,14 +498,14 @@ export default function ProfilePage() {
             {/* Work Experience */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <label className="block mb-3 text-sm font-normal text-gray-600">
+                <label className="block mb-3 text-sm font-normal text-secondary">
                   Where have you worked?
                 </label>
                 {formData.experiences.length > 0 && (
                   <button
                     type="button"
                     onClick={addExperience}
-                    className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-blue-50 cursor-pointer border border-blue-200  text-blue-600 hover:bg-blue-50 focus:outline-none"
+                    className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-blue-50 cursor-pointer border border-blue-200 text-blue-600 hover:bg-blue-50 focus:outline-none"
                     aria-label="Add Experience"
                   >
                     <Plus className="w-3 h-3" /> <span className="text-xs font-medium">New Experience</span>
@@ -516,55 +516,55 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={addExperience}
-                  className="w-full px-3 py-2 bg-white border border-dashed border-gray-300 rounded-lg text-left text-sm text-gray-500 hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-all duration-200 ease-out"
+                  className="w-full px-3 py-2 bg-foreground border border-dashed border-border rounded-lg text-left text-sm text-tertiary hover:border-border hover:bg-hover cursor-pointer transition-all duration-200 ease-out"
                   aria-label="Add First Experience"
                 >
                   <span className="inline-flex items-center gap-2">
-                    <Plus className="w-4 h-4 text-gray-400" />
+                    <Plus className="w-4 h-4 text-tertiary" />
                     Add Experience
                   </span>
                 </button>
               ) : (
                 <div className="space-y-3">
                   {formData.experiences.map((exp, index) => (
-                    <div key={index} className="relative border border-gray-200 rounded-lg p-4">
+                    <div key={index} className="relative border border-border rounded-lg p-4 bg-foreground">
                       <button
                         type="button"
                         onClick={() => removeExperience(index)}
-                        className="absolute top-2 right-2 p-1 text-slate-500 rounded-md hover:bg-gray-100 focus:outline-none cursor-pointer"
+                        className="absolute top-2 right-2 p-1 text-tertiary rounded-md hover:bg-hover focus:outline-none cursor-pointer"
                         aria-label="Remove Experience"
                       >
                         <X className="w-4 h-4" />
                       </button>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
                         <div>
-                          <label className="block text-xs text-slate-500 mb-2">Company</label>
+                          <label className="block text-xs text-tertiary mb-2">Company</label>
                           <input
                             type="text"
                             value={exp.company || ''}
                             onChange={(e) => updateExperience(index, 'company', e.target.value)}
                             placeholder="Linkmail Co."
-                            className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 text-sm bg-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-primary placeholder:text-tertiary"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-slate-500 mb-2">Title</label>
+                          <label className="block text-xs text-tertiary mb-2">Title</label>
                           <input
                             type="text"
                             value={exp.title || ''}
                             onChange={(e) => updateExperience(index, 'title', e.target.value)}
                             placeholder="Chief Snack Officer"
-                            className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 text-sm bg-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-primary placeholder:text-tertiary"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs text-slate-500 mb-2 mt-4">Details</label>
+                        <label className="block text-xs text-tertiary mb-2 mt-4">Details</label>
                         <textarea
                           value={exp.duration || ''}
                           onChange={(e) => updateExperience(index, 'duration', e.target.value)}
                           placeholder="A/B tested chip-to-dip ratios; increased crunch satisfaction by 42%"
-                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 text-sm bg-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-primary placeholder:text-tertiary"
                           rows={3}
                         />
                       </div>
@@ -576,17 +576,17 @@ export default function ProfilePage() {
 
             {/* Preferences */}
             {/* <div>
-              <label className="block text-sm font-normal text-gray-600 mb-3">
+              <label className="block text-sm font-normal text-secondary mb-3">
                 Email Preferences
               </label>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-gray-700 mb-2">Email Tone</label>
+                    <label className="block text-sm text-secondary mb-2">Email Tone</label>
                     <select
                       value={formData.preferences.emailTone || ''}
                       onChange={(e) => handleInputChange('preferences', { ...formData.preferences, emailTone: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 bg-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-primary placeholder:text-tertiary"
                     >
                       <option value="">Select tone...</option>
                       <option value="professional">Professional</option>
@@ -596,11 +596,11 @@ export default function ProfilePage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-700 mb-2">Email Length</label>
+                    <label className="block text-sm text-secondary mb-2">Email Length</label>
                     <select
                       value={formData.preferences.emailLength || ''}
                       onChange={(e) => handleInputChange('preferences', { ...formData.preferences, emailLength: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 bg-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-primary placeholder:text-tertiary"
                     >
                       <option value="">Select length...</option>
                       <option value="short">Short (1-2 paragraphs)</option>
@@ -610,7 +610,7 @@ export default function ProfilePage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Include Personal Touch</label>
+                  <label className="block text-sm text-secondary mb-2">Include Personal Touch</label>
                   <div className="flex items-center space-x-4">
                     <label className="flex items-center">
                       <input

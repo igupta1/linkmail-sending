@@ -100,7 +100,7 @@ export function ProfileSetup({ profile, setupStatus, onProfileUpdate }: ProfileS
       
       <div className="px-4 py-5 sm:p-6">
         <div className="mb-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-2">
+          <h3 className="text-lg leading-6 font-medium text-primary mb-2">
             Profile Setup
           </h3>
           

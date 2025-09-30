@@ -11,7 +11,7 @@ export default function DashboardLayout({
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
       <Sidebar 
         expanded={sidebarExpanded} 
@@ -24,7 +24,7 @@ export default function DashboardLayout({
           {children}
         </main>
         
-        <div className="sticky bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-gray-50 to-transparent pointer-events-none z-10 -mb-32" />
+        <div className="sticky bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent pointer-events-none z-10 -mb-32" />
       </div>
     </div>
   );

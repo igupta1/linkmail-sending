@@ -70,7 +70,7 @@ export default function Dashboard() {
 
           {/* Welcome Header */}
           <div className="mb-8">
-            <h1 className="text-4xl font-newsreader-500 text-gray-900">
+            <h1 className="text-4xl font-newsreader-500 text-primary">
                Welcome, {user?.name?.split(' ')[0] || 'there'}.
             </h1>
           </div>
@@ -130,7 +130,7 @@ export default function Dashboard() {
           {/* User Profile Section */}
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+              <h3 className="text-lg leading-6 font-medium text-primary mb-4">
                 Your Profile
               </h3>
               
@@ -143,7 +143,7 @@ export default function Dashboard() {
                   />
                 )}
                 <div className="flex-1">
-                  <h4 className="text-lg font-medium text-gray-900">
+                  <h4 className="text-lg font-medium text-primary">
                     {profile?.first_name && profile?.last_name 
                       ? `${profile.first_name} ${profile.last_name}`
                       : user?.name
@@ -265,14 +265,14 @@ export default function Dashboard() {
           <div className="mt-6">
             <div className="bg-white shadow rounded-lg">
               <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                <h3 className="text-lg leading-6 font-medium text-primary mb-4">
                   Recent Activity
                 </h3>
                 <div className="text-center py-8">
                   <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
-                  <h3 className="mt-2 text-sm font-medium text-gray-900">No activity yet</h3>
+                  <h3 className="mt-2 text-sm font-medium text-primary">No activity yet</h3>
                   <p className="mt-1 text-sm text-gray-500">Get started by sending your first email.</p>
                 </div>
               </div>
