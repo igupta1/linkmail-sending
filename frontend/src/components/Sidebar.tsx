@@ -25,7 +25,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
   };
 
   return (
-    <div className={`${expanded ? 'w-64 bg-foreground border border-border' : 'w-14 border border-transparent'} h-[calc(100dvh-1rem)] m-2 rounded-2xl transition-all duration-300 ease-in-out flex flex-col sticky top-2`}>
+    <div className={`${expanded ? 'w-64 bg-foreground border border-border' : 'w-14 border border-transparent'} h-[calc(100dvh-1rem)] m-2 rounded-2xl transition-all duration-300 ease-in-out flex flex-col sticky top-2 z-50`}>
       {/* Sidebar Header */}
       <div className="flex items-center justify-between p-3 border-gray-200">
         {expanded && (
@@ -74,7 +74,7 @@ export function Sidebar({ expanded, onToggle }: SidebarProps) {
       </nav>
 
       {/* Sidebar Footer */}
-      <div className="p-4 border-gray-200">
+      <div className="p-2">
         <LoginButton expanded={expanded} />
       </div>
     </div>

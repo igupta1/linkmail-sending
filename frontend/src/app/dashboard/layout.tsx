@@ -24,7 +24,7 @@ export default function DashboardLayout({
           {children}
         </main>
         
-        <div className="sticky bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent pointer-events-none z-10 -mb-32" />
+        <div className="sticky bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent pointer-events-none -mb-32 z-10" />
       </div>
     </div>
   );

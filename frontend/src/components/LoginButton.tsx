@@ -103,8 +103,8 @@ export function LoginButton({ expanded = false }: LoginButtonProps) {
           onClick={handleDropdownToggle}
           className={`${expanded ? 'w-full' : 'w-auto'} cursor-pointer flex items-center text-sm rounded-lg  ${
             expanded 
-              ? 'space-x-3 p-2 hover:bg-gray-100 transition-colors' 
-              : 'space-x-2 p-1 hover:bg-gray-100 transition-colors'
+              ? 'space-x-3 p-2 hover:bg-hover transition-colors' 
+              : 'space-x-2 p-1 hover:bg-hover transition-colors'
           }`}
         >
           {user.picture ? (
@@ -114,22 +114,22 @@ export function LoginButton({ expanded = false }: LoginButtonProps) {
               alt={user.name}
             />
           ) : (
-            <div className="h-8 w-8 rounded-sm bg-gray-300 flex items-center justify-center">
-              <span className="text-gray-600 text-sm font-medium">
+            <div className="h-8 w-8 rounded-sm bg-gray-300 dark:bg-white/15 flex items-center justify-center">
+              <span className="text-gray-600 dark:text-white text-sm font-medium">
                 {user.name?.charAt(0) || 'User'}
               </span>
             </div>
           )}
           {expanded && (
             <div className="flex-1 min-w-0 text-left">
-              <p className="text-sm font-semibold text-gray-900 truncate">{user.name}</p>
-              <p className="text-xs text-gray-500 truncate">Premium Plan</p>
+              <p className="text-sm font-semibold text-primary truncate">{user.name}</p>
+              <p className="text-xs text-secondary truncate">Premium Plan</p>
             </div>
           )}
         </button>
 
         {isDropdownOpen && (
-          <div className={`absolute w-56 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200 ${
+          <div className={`absolute w-60 bg-white/10 backdrop-blur-md rounded-md shadow-lg p-1 z-50 border border-border ${
             dropdownPosition.vertical === 'top' 
               ? 'bottom-full mb-2' 
               : 'top-full mt-2'
@@ -138,18 +138,17 @@ export function LoginButton({ expanded = false }: LoginButtonProps) {
               ? (expanded ? 'right-0' : 'left-0')
               : 'left-0'
           }`}>
-            <div className="px-4 py-2 border-b border-gray-100">
-              <p className="text-sm font-medium text-gray-900">{user.name}</p>
-              <p className="text-sm text-gray-500 truncate">{user.email}</p>
+            <div className="px-2 py-1.5 border-b border-border mb-2">
+              <p className="text-sm font-medium text-primary">{user.name}</p>
+              <p className="text-sm text-secondary truncate">{user.email}</p>
             </div>
             <button
               onClick={() => {
                 router.push('/dashboard/settings');
                 setIsDropdownOpen(false);
               }}
-              className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              className="flex items-center w-full text-left px-2 py-1.5 text-sm rounded-lg text-secondary hover:bg-selection cursor-pointer transition-colors"
             >
-              <Settings className="w-4 h-4 mr-3" />
               Settings
             </button>
             <button
@@ -157,7 +156,7 @@ export function LoginButton({ expanded = false }: LoginButtonProps) {
                 logout();
                 setIsDropdownOpen(false);
               }}
-              className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              className="block w-full text-left px-2 py-1.5 text-sm text-secondary rounded-lg hover:bg-selection cursor-pointer transition-colors"
             >
               Logout
             </button>
@@ -170,9 +169,15 @@ export function LoginButton({ expanded = false }: LoginButtonProps) {
   return (
     <button
       onClick={handleLogin}
-      className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+      className="flex items-center justify-center px-6 py-2 bg-background text-primary font-medium border-border border rounded-lg hover:bg-hover cursor-pointer transition-colors shadow-md"
     >
-      Sign in with Google
+      <img
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Google_Favicon_2025.svg/250px-Google_Favicon_2025.svg.png"
+        alt="Google"
+        className="inline-block w-4 h-4 mr-2 align-middle"
+        style={{ verticalAlign: "middle" }}
+      />
+      Continue with Google
     </button>
   );
 }
