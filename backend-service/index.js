@@ -51,8 +51,9 @@ const corsOptions = {
     ];
 
     // Also allow FRONTEND_URL if provided
-    if (process.env.FRONTEND_URL && !allowedOrigins.includes(process.env.FRONTEND_URL)) {
-      allowedOrigins.push(process.env.FRONTEND_URL);
+    const frontendUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.trim() : '';
+    if (frontendUrl && !allowedOrigins.includes(frontendUrl)) {
+      allowedOrigins.push(frontendUrl);
     }
     
     if (allowedOrigins.includes(origin)) {

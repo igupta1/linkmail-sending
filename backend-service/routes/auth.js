@@ -23,7 +23,7 @@ const {
 function getOAuth2Client() {
   // OAuth redirect URI should point to the backend callback endpoint
   // The backend will then redirect to the frontend with the token
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback';
+  const redirectUri = (process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback').trim();
   
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -71,7 +71,7 @@ router.get('/google/callback', async (req, res) => {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback'
+      (process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback').trim()
     );
     
     const { tokens } = await oauth2Client.getToken(code);
@@ -191,7 +191,8 @@ router.get('/google/callback', async (req, res) => {
       `);
     } else {
       // Web application flow - redirect to dashboard or success page
-      res.redirect(`${process.env.FRONTEND_URL}/dashboard?token=${jwtToken}`);
+      const frontendUrl = (process.env.FRONTEND_URL || '').trim();
+      res.redirect(`${frontendUrl}/dashboard?token=${jwtToken}`);
     }
 
   } catch (error) {
