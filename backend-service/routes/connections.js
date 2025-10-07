@@ -12,9 +12,10 @@ const router = express.Router();
  * @param {string} userId - User ID
  * @param {number} contactId - Contact ID
  * @param {string} subject - Connection subject
+ * @param {string} profilePictureUrl - Profile picture URL (optional)
  * @returns {Object} Connection object
  */
-async function findOrCreateConnection(userId, contactId, subject = null) {
+async function findOrCreateConnection(userId, contactId, subject = null, profilePictureUrl = null) {
   const client = await getClient();
   
   try {
@@ -26,16 +27,27 @@ async function findOrCreateConnection(userId, contactId, subject = null) {
     const { rows: existingConnections } = await client.query(findSql, [userId, contactId]);
     
     if (existingConnections.length > 0) {
+      // Update profile picture URL if provided and not already set
+      if (profilePictureUrl && !existingConnections[0].profile_picture_url) {
+        const updateSql = `
+          UPDATE connections 
+          SET profile_picture_url = $1, updated_at = NOW()
+          WHERE user_id = $2 AND contact_id = $3
+          RETURNING *
+        `;
+        const { rows: updatedConnections } = await client.query(updateSql, [profilePictureUrl, userId, contactId]);
+        return updatedConnections[0];
+      }
       return existingConnections[0];
     }
     
     // Create new connection
     const insertSql = `
-      INSERT INTO connections (user_id, contact_id, subject, status)
-      VALUES ($1, $2, $3, 'active')
+      INSERT INTO connections (user_id, contact_id, subject, status, profile_picture_url)
+      VALUES ($1, $2, $3, 'active', $4)
       RETURNING *
     `;
-    const { rows: newConnections } = await client.query(insertSql, [userId, contactId, subject]);
+    const { rows: newConnections } = await client.query(insertSql, [userId, contactId, subject, profilePictureUrl]);
     return newConnections[0];
     
   } finally {
@@ -118,7 +130,8 @@ router.get('/', async (req, res) => {
         co.job_title,
         co.company,
         co.linkedin_url,
-        ce.email as primary_email
+        ce.email as primary_email,
+        c.profile_picture_url
       FROM connections c
       JOIN contacts co ON c.contact_id = co.id
       LEFT JOIN contact_emails ce ON co.id = ce.contact_id AND ce.is_primary = true
@@ -170,7 +183,8 @@ router.get('/:contactId', [
         co.job_title,
         co.company,
         co.linkedin_url,
-        ce.email as primary_email
+        ce.email as primary_email,
+        c.profile_picture_url
       FROM connections c
       JOIN contacts co ON c.contact_id = co.id
       LEFT JOIN contact_emails ce ON co.id = ce.contact_id AND ce.is_primary = true

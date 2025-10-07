@@ -200,7 +200,8 @@ router.post('/send', [
   body('contactInfo.lastName').optional().isString().trim(),
   body('contactInfo.jobTitle').optional().isString().trim(),
   body('contactInfo.company').optional().isString().trim(),
-  body('contactInfo.linkedinUrl').optional().isString().trim()
+  body('contactInfo.linkedinUrl').optional().isString().trim(),
+  body('contactInfo.profilePictureUrl').optional().isString().trim()
 ], async (req, res) => {
   // Validate request
   const errors = validationResult(req);
@@ -253,7 +254,7 @@ router.post('/send', [
 
     // Find or create contact and connection
     const contact = await findOrCreateContactByEmail(to, contactInfo);
-    const connection = await findOrCreateConnection(userId, contact.id, subject);
+    const connection = await findOrCreateConnection(userId, contact.id, subject, contactInfo?.profilePictureUrl);
     
     // Create message object for the connection
     const message = {
