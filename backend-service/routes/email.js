@@ -200,8 +200,8 @@ router.post('/send', [
   body('contactInfo.lastName').optional().isString().trim(),
   body('contactInfo.jobTitle').optional().isString().trim(),
   body('contactInfo.company').optional().isString().trim(),
-  body('contactInfo.linkedinUrl').optional().isString().trim(),
-  body('contactInfo.profilePictureUrl').optional().isString().trim()
+  body('contactInfo.linkedinUrl').optional().isString().trim()
+  // Note: profilePictureUrl validation omitted - can be null, undefined, or string
 ], async (req, res) => {
   // Validate request
   const errors = validationResult(req);
