@@ -354,7 +354,7 @@ router.get('/google/callback', async (req, res) => {
               </ol>
             </div>
             
-            <p class="footer-text">This tab will automatically close in <span class="countdown" id="countdown">10</span> seconds</p>
+            <p class="footer-text">This tab will automatically close in <span class="countdown" id="countdown">10</span> <span id="seconds-text">seconds</span></p>
           </div>
           
           <script>
@@ -385,19 +385,22 @@ router.get('/google/callback', async (req, res) => {
             // Countdown timer
             let countdown = 10;
             const countdownEl = document.getElementById('countdown');
+            const secondsTextEl = document.getElementById('seconds-text');
             
             const timer = setInterval(() => {
               countdown--;
+              
+              // Update countdown number
               if (countdownEl) {
                 countdownEl.textContent = countdown;
-                
-                // Update the entire footer text to handle singular/plural properly
-                const footerText = countdownEl.parentElement;
-                if (footerText) {
-                  footerText.innerHTML = 'This tab will automatically close in <span class="countdown" id="countdown">' + countdown + '</span> second' + (countdown === 1 ? '' : 's');
-                }
               }
               
+              // Update singular/plural
+              if (secondsTextEl) {
+                secondsTextEl.textContent = countdown === 1 ? 'second' : 'seconds';
+              }
+              
+              // Close tab when countdown reaches 0
               if (countdown <= 0) {
                 clearInterval(timer);
                 window.close();
