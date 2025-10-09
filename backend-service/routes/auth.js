@@ -386,6 +386,7 @@ router.get('/google/callback', async (req, res) => {
             let countdown = 10;
             const countdownEl = document.getElementById('countdown');
             const secondsTextEl = document.getElementById('seconds-text');
+            const footerTextEl = document.querySelector('.footer-text');
             
             const timer = setInterval(() => {
               countdown--;
@@ -403,7 +404,36 @@ router.get('/google/callback', async (req, res) => {
               // Close tab when countdown reaches 0
               if (countdown <= 0) {
                 clearInterval(timer);
-                window.close();
+                
+                // Update message
+                if (footerTextEl) {
+                  footerTextEl.textContent = 'You can now close this tab';
+                }
+                
+                // Try multiple methods to close the tab
+                try {
+                  window.close();
+                } catch (e) {
+                  console.log('window.close() failed, trying alternatives');
+                }
+                
+                // Alternative method
+                setTimeout(() => {
+                  try {
+                    self.close();
+                  } catch (e) {
+                    console.log('self.close() also failed');
+                  }
+                }, 100);
+                
+                // If still open after 500ms, the browser blocked close
+                setTimeout(() => {
+                  if (footerTextEl) {
+                    footerTextEl.textContent = 'Please close this tab manually';
+                    footerTextEl.style.fontWeight = '600';
+                    footerTextEl.style.color = '#0B66C2';
+                  }
+                }, 500);
               }
             }, 1000);
           </script>
