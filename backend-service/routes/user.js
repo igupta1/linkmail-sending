@@ -9,7 +9,7 @@ const router = express.Router();
 
 /**
  * GET /api/user/profile
- * Get user profile information
+ * Get user profile information (merges session + database data)
  */
 router.get('/profile', async (req, res) => {
   const userId = req.user.id;
@@ -27,13 +27,35 @@ router.get('/profile', async (req, res) => {
     userSession.lastAccessed = new Date();
     await setUserSession(userId, userSession);
 
+    // Try to fetch additional data from user_profiles table
+    let firstName = null;
+    let lastName = null;
+    try {
+      const sql = `SELECT first_name, last_name FROM user_profiles WHERE user_id = $1`;
+      const { rows } = await query(sql, [userId]);
+      if (rows.length > 0) {
+        firstName = rows[0].first_name;
+        lastName = rows[0].last_name;
+      }
+    } catch (dbError) {
+      console.warn('Could not fetch user_profiles data (non-fatal):', dbError?.message || dbError);
+    }
+
+    // Construct full name from first/last if session name is missing
+    let fullName = userSession.name;
+    if (!fullName && (firstName || lastName)) {
+      fullName = `${firstName || ''} ${lastName || ''}`.trim();
+    }
+
     // Return user profile data (excluding sensitive information)
     res.json({
       success: true,
       user: {
         id: userSession.id,
         email: userSession.email,
-        name: userSession.name,
+        name: fullName || userSession.name,
+        firstName: firstName,
+        lastName: lastName,
         picture: userSession.picture,
         createdAt: userSession.createdAt,
         lastAccessed: userSession.lastAccessed,
