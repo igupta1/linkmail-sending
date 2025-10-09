@@ -394,7 +394,7 @@ router.get('/google/callback', async (req, res) => {
                 // Update the entire footer text to handle singular/plural properly
                 const footerText = countdownEl.parentElement;
                 if (footerText) {
-                  footerText.innerHTML = `This tab will automatically close in <span class="countdown" id="countdown">${countdown}</span> second${countdown === 1 ? '' : 's'}`;
+                  footerText.innerHTML = 'This tab will automatically close in <span class="countdown" id="countdown">' + countdown + '</span> second' + (countdown === 1 ? '' : 's');
                 }
               }
               
