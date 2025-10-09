@@ -317,15 +317,10 @@ router.get('/google/callback', async (req, res) => {
             
             .footer-text {
               margin-top: 32px;
-              color: #9ca3af;
-              font-size: 13px;
-              animation: fadeIn 0.5s ease-out 0.7s backwards;
-            }
-            
-            .countdown {
-              display: inline-block;
-              font-weight: 600;
               color: #6b7280;
+              font-size: 14px;
+              font-weight: 500;
+              animation: fadeIn 0.5s ease-out 0.7s backwards;
             }
           </style>
         </head>
@@ -350,11 +345,11 @@ router.get('/google/callback', async (req, res) => {
               <ol class="steps">
                 <li>Close this browser tab</li>
                 <li>Return to LinkedIn</li>
-                <li>The extension is now authenticated and ready to use</li>
+                <li>The extension is now ready to use</li>
               </ol>
             </div>
             
-            <p class="footer-text">This tab will automatically close in <span class="countdown" id="countdown">10</span> <span id="seconds-text">seconds</span></p>
+            <p class="footer-text">Please close this tab and return to LinkedIn</p>
           </div>
           
           <script>
@@ -381,61 +376,6 @@ router.get('/google/callback', async (req, res) => {
               console.error('LinkMail: Failed to store extension token:', err);
               console.error('LinkMail: This means the extension will not detect authentication');
             });
-            
-            // Countdown timer
-            let countdown = 10;
-            const countdownEl = document.getElementById('countdown');
-            const secondsTextEl = document.getElementById('seconds-text');
-            const footerTextEl = document.querySelector('.footer-text');
-            
-            const timer = setInterval(() => {
-              countdown--;
-              
-              // Update countdown number
-              if (countdownEl) {
-                countdownEl.textContent = countdown;
-              }
-              
-              // Update singular/plural
-              if (secondsTextEl) {
-                secondsTextEl.textContent = countdown === 1 ? 'second' : 'seconds';
-              }
-              
-              // Close tab when countdown reaches 0
-              if (countdown <= 0) {
-                clearInterval(timer);
-                
-                // Update message
-                if (footerTextEl) {
-                  footerTextEl.textContent = 'You can now close this tab';
-                }
-                
-                // Try multiple methods to close the tab
-                try {
-                  window.close();
-                } catch (e) {
-                  console.log('window.close() failed, trying alternatives');
-                }
-                
-                // Alternative method
-                setTimeout(() => {
-                  try {
-                    self.close();
-                  } catch (e) {
-                    console.log('self.close() also failed');
-                  }
-                }, 100);
-                
-                // If still open after 500ms, the browser blocked close
-                setTimeout(() => {
-                  if (footerTextEl) {
-                    footerTextEl.textContent = 'Please close this tab manually';
-                    footerTextEl.style.fontWeight = '600';
-                    footerTextEl.style.color = '#0B66C2';
-                  }
-                }, 500);
-              }
-            }, 1000);
           </script>
         </body>
         </html>
