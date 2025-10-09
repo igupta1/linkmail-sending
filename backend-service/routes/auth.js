@@ -315,35 +315,11 @@ router.get('/google/callback', async (req, res) => {
               font-weight: 600;
             }
             
-            .close-button {
-              background: #0B66C2;
-              color: white;
-              border: none;
-              border-radius: 100px;
-              padding: 14px 32px;
-              font-size: 15px;
-              font-weight: 600;
-              cursor: pointer;
-              transition: all 0.2s ease;
-              width: 100%;
-              animation: fadeIn 0.5s ease-out 0.7s backwards;
-            }
-            
-            .close-button:hover {
-              background: #084e96;
-              transform: translateY(-1px);
-              box-shadow: 0 4px 12px rgba(11, 102, 194, 0.3);
-            }
-            
-            .close-button:active {
-              transform: translateY(0);
-            }
-            
             .footer-text {
-              margin-top: 20px;
+              margin-top: 32px;
               color: #9ca3af;
               font-size: 13px;
-              animation: fadeIn 0.5s ease-out 0.8s backwards;
+              animation: fadeIn 0.5s ease-out 0.7s backwards;
             }
             
             .countdown {
@@ -356,8 +332,8 @@ router.get('/google/callback', async (req, res) => {
         <body>
           <div class="container">
             <div class="logo-container">
-              <svg class="logo-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M20 20 L50 20 L80 20 L80 35 L65 50 L65 80 L35 80 L35 50 L20 35 Z" fill="white"/>
+              <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 4 L20 4 L20 8 L16 12 L16 20 L8 20 L8 12 L4 8 Z" fill="white"/>
               </svg>
             </div>
             
@@ -378,9 +354,7 @@ router.get('/google/callback', async (req, res) => {
               </ol>
             </div>
             
-            <button class="close-button" onclick="window.close()">Close This Tab</button>
-            
-            <p class="footer-text">This tab will automatically close in <span class="countdown" id="countdown">3</span> seconds</p>
+            <p class="footer-text">This tab will automatically close in <span class="countdown" id="countdown">10</span> seconds</p>
           </div>
           
           <script>
@@ -409,13 +383,19 @@ router.get('/google/callback', async (req, res) => {
             });
             
             // Countdown timer
-            let countdown = 3;
+            let countdown = 10;
             const countdownEl = document.getElementById('countdown');
             
             const timer = setInterval(() => {
               countdown--;
               if (countdownEl) {
                 countdownEl.textContent = countdown;
+                
+                // Update the entire footer text to handle singular/plural properly
+                const footerText = countdownEl.parentElement;
+                if (footerText) {
+                  footerText.innerHTML = `This tab will automatically close in <span class="countdown" id="countdown">${countdown}</span> second${countdown === 1 ? '' : 's'}`;
+                }
               }
               
               if (countdown <= 0) {
@@ -658,8 +638,8 @@ if (process.env.NODE_ENV !== 'production') {
       <body>
         <div class="container">
           <div class="logo-container">
-            <svg class="logo-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M20 20 L50 20 L80 20 L80 35 L65 50 L65 80 L35 80 L35 50 L20 35 Z" fill="white"/>
+            <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 4 L20 4 L20 8 L16 12 L16 20 L8 20 L8 12 L4 8 Z" fill="white"/>
             </svg>
           </div>
           
