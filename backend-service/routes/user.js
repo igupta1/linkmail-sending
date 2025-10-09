@@ -32,13 +32,18 @@ router.get('/profile', async (req, res) => {
     let lastName = null;
     try {
       const sql = `SELECT first_name, last_name FROM user_profiles WHERE user_id = $1`;
+      console.log('[UserRoute] Querying user_profiles for userId:', userId);
       const { rows } = await query(sql, [userId]);
+      console.log('[UserRoute] Query result - rows found:', rows.length);
       if (rows.length > 0) {
         firstName = rows[0].first_name;
         lastName = rows[0].last_name;
+        console.log('[UserRoute] Found in database - firstName:', firstName, 'lastName:', lastName);
+      } else {
+        console.warn('[UserRoute] No user_profiles record found for userId:', userId);
       }
     } catch (dbError) {
-      console.warn('Could not fetch user_profiles data (non-fatal):', dbError?.message || dbError);
+      console.error('[UserRoute] Database query error:', dbError?.message || dbError);
     }
 
     // Construct full name from first/last if session name is missing
@@ -48,7 +53,7 @@ router.get('/profile', async (req, res) => {
     }
 
     // Return user profile data (excluding sensitive information)
-    res.json({
+    const userResponse = {
       success: true,
       user: {
         id: userSession.id,
@@ -61,7 +66,9 @@ router.get('/profile', async (req, res) => {
         lastAccessed: userSession.lastAccessed,
         emailsSent: userSession.emailHistory ? userSession.emailHistory.length : 0
       }
-    });
+    };
+    console.log('[UserRoute] Returning user profile response:', JSON.stringify(userResponse.user, null, 2));
+    res.json(userResponse);
 
   } catch (error) {
     console.error('Error fetching user profile:', error);
