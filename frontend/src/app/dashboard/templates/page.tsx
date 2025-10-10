@@ -5,13 +5,15 @@ import { useUserProfile, UserProfile } from '@/hooks/useUserProfile';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, X, Save, Trash2, Edit3 } from 'lucide-react';
+import { Plus, X, Save, Trash2, Edit3, Upload, File } from 'lucide-react';
+import { apiClient } from '@/lib/api';
 
 type TemplateItem = {
   icon?: string;
   title: string;
   body: string;
-  fileUrl?: string | null;
+  subject: string;
+  file?: string | null;
   strict_template?: boolean;
 };
 
@@ -23,6 +25,8 @@ export default function TemplatesPage() {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<TemplateItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -36,17 +40,53 @@ export default function TemplatesPage() {
       icon: t?.icon || '📝',
       title: t?.title || 'Untitled',
       body: t?.body || '',
-      fileUrl: t?.fileUrl ?? null,
+      subject: t?.subject || t?.title || 'Subject Line',
+      file: t?.file ?? t?.fileUrl ?? null, // Handle both new 'file' and legacy 'fileUrl'
       strict_template: typeof t?.strict_template === 'boolean' ? t.strict_template : false,
     }));
   }, [profile?.templates]);
 
   const openEditor = (index: number | null) => {
     setSelectedIndex(index);
+    setUploadedFileName(null);
     if (index === null) {
-      setDraft({ icon: '📝', title: '', body: '', fileUrl: null, strict_template: false });
+      setDraft({ icon: '📝', title: '', body: '', subject: 'Subject Line', file: null, strict_template: false });
     } else {
       setDraft({ ...templates[index] });
+      // Extract filename from URL if it exists
+      if (templates[index]?.file) {
+        const urlParts = templates[index].file!.split('/');
+        setUploadedFileName(urlParts[urlParts.length - 1]);
+      }
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !draft) return;
+
+    setIsUploading(true);
+    try {
+      const response = await apiClient.uploadFile(file);
+      
+      if (response.success && response.data) {
+        setDraft({ ...draft, file: response.data.file.url });
+        setUploadedFileName(response.data.file.originalName);
+      } else {
+        alert('Failed to upload file: ' + (response.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload file');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    if (draft) {
+      setDraft({ ...draft, file: null });
+      setUploadedFileName(null);
     }
   };
 
@@ -212,6 +252,17 @@ export default function TemplatesPage() {
                   </div>
 
                   <div>
+                    <label className="block text-sm text-gray-600 mb-2">Subject Line</label>
+                    <input
+                      type="text"
+                      value={draft.subject}
+                      onChange={(e) => setDraft({ ...(draft as TemplateItem), subject: e.target.value })}
+                      placeholder="Quick question about [Company Name]"
+                      className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
                     <label className="block text-sm text-gray-600 mb-2">Body</label>
                     <textarea
                       rows={10}
@@ -222,16 +273,61 @@ export default function TemplatesPage() {
                     />
                   </div>
 
-                  {/* Optional attachment URL field; file uploads can be added later */}
+                  {/* File attachment upload */}
                   <div>
-                    <label className="block text-sm text-gray-600 mb-2">Attachment URL (optional)</label>
-                    <input
-                      type="url"
-                      value={draft.fileUrl || ''}
-                      onChange={(e) => setDraft({ ...(draft as TemplateItem), fileUrl: e.target.value })}
-                      placeholder="https://..."
-                      className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <label className="block text-sm text-gray-600 mb-2">Attachment (optional)</label>
+                    
+                    {!draft.file ? (
+                      <div className="relative">
+                        <input
+                          type="file"
+                          id="file-upload"
+                          className="hidden"
+                          onChange={handleFileUpload}
+                          disabled={isUploading}
+                          accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif"
+                        />
+                        <label
+                          htmlFor="file-upload"
+                          className={`
+                            w-full px-3 py-2 text-sm border border-gray-300 rounded-lg 
+                            flex items-center justify-center gap-2 cursor-pointer
+                            transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500
+                            ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}
+                          `}
+                        >
+                          {isUploading ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4" />
+                              Choose file to upload
+                            </>
+                          )}
+                        </label>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-300 rounded-lg">
+                        <File className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm text-gray-700 flex-1">
+                          {uploadedFileName || 'Uploaded file'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleRemoveFile}
+                          className="text-red-500 hover:text-red-700 text-sm"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                    
+                    <p className="text-xs text-gray-500 mt-1">
+                      Supports: PDF, Word docs, text files, and images (max 10MB)
+                    </p>
                   </div>
                 </div>
 

@@ -13,6 +13,7 @@ const userRoutes = require('./routes/user');
 const { authenticateToken } = require('./middleware/auth');
 const contactsRoutes = require('./routes/contacts');
 const { router: connectionsRoutes } = require('./routes/connections');
+const uploadRoutes = require('./routes/upload');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -77,6 +78,10 @@ app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Serve uploaded files statically  
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
@@ -92,6 +97,7 @@ app.use('/api/email', authenticateToken, emailRoutes);
 app.use('/api/user', authenticateToken, userRoutes);
 app.use('/api/contacts', authenticateToken, contactsRoutes);
 app.use('/api/connections', authenticateToken, connectionsRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
