@@ -11,6 +11,54 @@ const { cleanContactInfo } = require('../utils/contact-cleaner');
 const router = express.Router();
 
 /**
+ * Fetch file from URL and convert to base64
+ * @param {string} url - File URL
+ * @returns {Promise<{data: string, name: string, type: string, size: number}>}
+ */
+async function fetchFileFromUrl(url) {
+  try {
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch file: ${response.statusText}`);
+    }
+
+    // Get file info from headers
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    const contentLength = parseInt(response.headers.get('content-length') || '0');
+    
+    // Extract filename from URL or Content-Disposition header
+    const contentDisposition = response.headers.get('content-disposition');
+    let filename = 'attachment';
+    
+    if (contentDisposition && contentDisposition.includes('filename=')) {
+      const matches = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (matches && matches[1]) {
+        filename = matches[1].replace(/['"]/g, '');
+      }
+    } else {
+      // Extract from URL
+      const urlParts = new URL(url).pathname.split('/');
+      filename = urlParts[urlParts.length - 1] || 'attachment';
+    }
+
+    // Get file buffer and convert to base64
+    const buffer = await response.arrayBuffer();
+    const base64Data = Buffer.from(buffer).toString('base64');
+
+    return {
+      data: base64Data,
+      name: filename,
+      type: contentType,
+      size: contentLength || buffer.byteLength
+    };
+  } catch (error) {
+    console.error('Error fetching file from URL:', error);
+    throw new Error(`Failed to fetch file: ${error.message}`);
+  }
+}
+
+/**
  * Find or create contact by email address
  * @param {string} email - Email address
  * @param {Object} contactInfo - Additional contact information
@@ -237,6 +285,37 @@ router.post('/send', [
     const profileResponse = await gmail.users.getProfile({ userId: 'me' });
     const userEmail = profileResponse.data.emailAddress;
 
+    // Process attachments - fetch files from URLs if needed
+    const processedAttachments = [];
+    if (attachments && attachments.length > 0) {
+      console.log(`Processing ${attachments.length} attachments...`);
+      
+      for (const attachment of attachments) {
+        try {
+          if (attachment.url && !attachment.data) {
+            // Fetch file from URL and convert to base64
+            console.log(`Fetching attachment from URL: ${attachment.url}`);
+            const fileData = await fetchFileFromUrl(attachment.url);
+            processedAttachments.push(fileData);
+            console.log(`Successfully fetched: ${fileData.name} (${fileData.size} bytes)`);
+          } else if (attachment.data) {
+            // Already has base64 data
+            processedAttachments.push({
+              data: attachment.data,
+              name: attachment.name,
+              type: attachment.type || 'application/octet-stream',
+              size: attachment.size || 0
+            });
+          }
+        } catch (error) {
+          console.error(`Failed to process attachment:`, error);
+          // Continue with other attachments even if one fails
+        }
+      }
+    }
+
+    console.log(`Processed ${processedAttachments.length} attachments successfully`);
+
     // Create the email message
     const rawMessage = createEmailMessage({
       to,
@@ -246,7 +325,7 @@ router.post('/send', [
         email: userEmail,
         name: userSession.name
       },
-      attachments
+      attachments: processedAttachments
     });
 
     // Send the email
@@ -266,7 +345,7 @@ router.post('/send', [
       direction: 'sent',
       subject,
       body,
-      attachments: attachments.map(a => ({ name: a.name, size: a.size, type: a.type })),
+      attachments: processedAttachments.map(a => ({ name: a.name, size: a.size, type: a.type })),
       sent_at: new Date().toISOString(),
       gmail_message_id: sendResponse.data.id,
       gmail_thread_id: sendResponse.data.threadId,
@@ -287,7 +366,7 @@ router.post('/send', [
       to,
       subject,
       body,
-      attachments: attachments.map(a => ({ name: a.name, size: a.size, type: a.type })),
+      attachments: processedAttachments.map(a => ({ name: a.name, size: a.size, type: a.type })),
       sentAt: new Date().toISOString(),
       gmailMessageId: sendResponse.data.id,
       contactId: contact.id,
