@@ -6,24 +6,29 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads');
-    // Create uploads directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
-    cb(null, `${name}-${uniqueSuffix}${ext}`);
-  }
-});
+// In-memory storage for uploaded files in serverless environments  
+const fileStorage = new Map();
+
+// Configure multer for file uploads - use memory storage for serverless
+const storage = process.env.VERCEL 
+  ? multer.memoryStorage() // Use memory storage in serverless environments
+  : multer.diskStorage({
+      destination: (req, file, cb) => {
+        const uploadDir = path.join(__dirname, '../uploads');
+        // Create uploads directory if it doesn't exist (local only)
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+      },
+      filename: (req, file, cb) => {
+        // Generate unique filename
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        const name = path.basename(file.originalname, ext);
+        cb(null, `${name}-${uniqueSuffix}${ext}`);
+      }
+    });
 
 const upload = multer({
   storage: storage,
@@ -72,14 +77,34 @@ router.post('/', authenticateToken, upload.single('file'), (req, res) => {
 
     console.log('File uploaded successfully:', {
       originalName: req.file.originalname,
-      filename: req.file.filename,
+      filename: req.file.filename || 'memory-stored',
       size: req.file.size,
-      mimetype: req.file.mimetype
+      mimetype: req.file.mimetype,
+      isMemoryStorage: !req.file.filename
     });
 
-    // In a production environment, you'd upload to cloud storage (AWS S3, Google Cloud Storage, etc.)
-    // For now, we'll serve files statically from the uploads directory
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    let fileUrl;
+    
+    if (process.env.VERCEL) {
+      // In serverless environment, store file in memory and create a serving endpoint
+      const fileId = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const ext = path.extname(req.file.originalname);
+      const filename = `${path.basename(req.file.originalname, ext)}-${fileId}${ext}`;
+      
+      // Store file data in memory
+      fileStorage.set(filename, {
+        buffer: req.file.buffer,
+        originalName: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        uploadedAt: new Date()
+      });
+      
+      fileUrl = `${req.protocol}://${req.get('host')}/api/upload/files/${filename}`;
+    } else {
+      // Local development - use disk storage
+      fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    }
     
     res.json({
       success: true,
@@ -97,6 +122,31 @@ router.post('/', authenticateToken, upload.single('file'), (req, res) => {
       message: 'Failed to upload file'
     });
   }
+});
+
+/**
+ * GET /api/files/:filename
+ * Serve uploaded files from memory storage (serverless environments)
+ */
+router.get('/files/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const fileData = fileStorage.get(filename);
+  
+  if (!fileData) {
+    return res.status(404).json({
+      error: 'FileNotFound',
+      message: 'File not found'
+    });
+  }
+  
+  // Set appropriate headers
+  res.setHeader('Content-Type', fileData.mimetype);
+  res.setHeader('Content-Length', fileData.size);
+  res.setHeader('Content-Disposition', `inline; filename="${fileData.originalName}"`);
+  res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+  
+  // Send the file buffer
+  res.send(fileData.buffer);
 });
 
 /**
