@@ -356,16 +356,36 @@ router.put('/bio', [
   }
 
   if (Array.isArray(templates)) {
-    const value = JSON.stringify(
-      templates.map(t => ({
+    // Debug logging
+    console.log('[UserRoute] Received templates array:', JSON.stringify(templates, null, 2));
+    
+    const mappedTemplates = templates.map(t => {
+      const fileValue = typeof t.file === 'string' && t.file.trim().length > 0 
+        ? t.file.trim() 
+        : (typeof t.fileUrl === 'string' && t.fileUrl.trim().length > 0 ? t.fileUrl.trim() : null);
+      
+      console.log(`[UserRoute] Template "${t.title || 'Untitled'}":`, {
+        hasFile: !!t.file,
+        fileType: typeof t.file,
+        fileValue: t.file,
+        hasFileUrl: !!t.fileUrl,
+        fileUrlValue: t.fileUrl,
+        finalFileValue: fileValue
+      });
+      
+      return {
         icon: typeof t.icon === 'string' && t.icon.trim().length > 0 ? t.icon.trim() : '📝',
         title: t.title || t.name || '',
         body: t.body || t.content || '',
         subject: t.subject || t.title || t.name || 'Subject Line',
-        file: typeof t.file === 'string' && t.file.trim().length > 0 ? t.file.trim() : (typeof t.fileUrl === 'string' && t.fileUrl.trim().length > 0 ? t.fileUrl.trim() : null),
+        file: fileValue,
         strict_template: typeof t.strict_template === 'boolean' ? t.strict_template : false
-      }))
-    );
+      };
+    });
+    
+    console.log('[UserRoute] Mapped templates:', JSON.stringify(mappedTemplates, null, 2));
+    
+    const value = JSON.stringify(mappedTemplates);
     updateFields.push(`templates = $${paramIndex}::jsonb`);
     insertFields.push('templates');
     insertValues.push(value);
