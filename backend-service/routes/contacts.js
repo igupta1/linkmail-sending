@@ -179,6 +179,11 @@ router.get('/facets', async (req, res) => {
  * Excludes contacts that the user has already contacted
  */
 router.get('/search-similar', async (req, res) => {
+  // Prevent caching to ensure fresh results every time
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  
   try {
     const rawCategory = (req.query.category || '').toString();
     const rawCompany = (req.query.company || '').toString();
@@ -206,16 +211,31 @@ router.get('/search-similar', async (req, res) => {
         console.log(`[search-similar] Raw contacted_linkedins from DB:`, rawContactedLinkedins);
         
         if (rawContactedLinkedins && Array.isArray(rawContactedLinkedins) && rawContactedLinkedins.length > 0) {
-          // Create variants of each contacted URL (with and without trailing slash)
+          // Create variants of each contacted URL (trailing slash + http/https)
           const urlSet = new Set();
           rawContactedLinkedins.forEach(url => {
             const lower = url.toLowerCase();
+            
+            // Add original
             urlSet.add(lower);
+            
             // Add variant with/without trailing slash
-            if (lower.endsWith('/')) {
-              urlSet.add(lower.replace(/\/+$/, ''));
-            } else {
-              urlSet.add(`${lower}/`);
+            const withoutSlash = lower.replace(/\/+$/, '');
+            const withSlash = withoutSlash + '/';
+            urlSet.add(withoutSlash);
+            urlSet.add(withSlash);
+            
+            // Add http/https variants
+            if (lower.startsWith('https://')) {
+              const httpVersion = lower.replace('https://', 'http://');
+              urlSet.add(httpVersion);
+              urlSet.add(httpVersion.replace(/\/+$/, ''));
+              urlSet.add(httpVersion.replace(/\/+$/, '') + '/');
+            } else if (lower.startsWith('http://')) {
+              const httpsVersion = lower.replace('http://', 'https://');
+              urlSet.add(httpsVersion);
+              urlSet.add(httpsVersion.replace(/\/+$/, ''));
+              urlSet.add(httpsVersion.replace(/\/+$/, '') + '/');
             }
           });
           contactedLinkedins = Array.from(urlSet);
@@ -407,6 +427,11 @@ router.get('/search-similar', async (req, res) => {
  * Excludes contacts that the user has already contacted
  */
 router.get('/search', async (req, res) => {
+  // Prevent caching to ensure fresh results every time
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  
   try {
     const rawJobTitle = (req.query.jobTitle || '').toString();
     const rawCompany = (req.query.company || '').toString();
@@ -428,16 +453,31 @@ router.get('/search', async (req, res) => {
       const userProfileSql = `SELECT contacted_linkedins FROM user_profiles WHERE user_id = $1`;
       const userProfileRows = await query(userProfileSql, [userId]);
       if (userProfileRows.rows.length > 0 && userProfileRows.rows[0].contacted_linkedins) {
-        // Create variants of each contacted URL (with and without trailing slash)
+        // Create variants of each contacted URL (trailing slash + http/https)
         const urlSet = new Set();
         userProfileRows.rows[0].contacted_linkedins.forEach(url => {
           const lower = url.toLowerCase();
+          
+          // Add original
           urlSet.add(lower);
+          
           // Add variant with/without trailing slash
-          if (lower.endsWith('/')) {
-            urlSet.add(lower.replace(/\/+$/, ''));
-          } else {
-            urlSet.add(`${lower}/`);
+          const withoutSlash = lower.replace(/\/+$/, '');
+          const withSlash = withoutSlash + '/';
+          urlSet.add(withoutSlash);
+          urlSet.add(withSlash);
+          
+          // Add http/https variants
+          if (lower.startsWith('https://')) {
+            const httpVersion = lower.replace('https://', 'http://');
+            urlSet.add(httpVersion);
+            urlSet.add(httpVersion.replace(/\/+$/, ''));
+            urlSet.add(httpVersion.replace(/\/+$/, '') + '/');
+          } else if (lower.startsWith('http://')) {
+            const httpsVersion = lower.replace('http://', 'https://');
+            urlSet.add(httpsVersion);
+            urlSet.add(httpsVersion.replace(/\/+$/, ''));
+            urlSet.add(httpsVersion.replace(/\/+$/, '') + '/');
           }
         });
         contactedLinkedins = Array.from(urlSet);
