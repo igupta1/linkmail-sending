@@ -47,6 +47,7 @@ const corsOptions = {
       'https://linkmail-web.vercel.app',
       'https://linkmail-sending.vercel.app', // allow same-origin success page
       'https://www.linkmail.dev',
+      'https://linkmail.dev', // Add without www as well
       'http://localhost:3000',
       'http://localhost:3001'
     ];

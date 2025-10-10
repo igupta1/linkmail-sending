@@ -56,12 +56,26 @@ const upload = multer({
  */
 router.post('/', authenticateToken, upload.single('file'), (req, res) => {
   try {
+    console.log('Upload request received:', {
+      origin: req.get('origin'),
+      userAgent: req.get('user-agent'),
+      hasFile: !!req.file
+    });
+
     if (!req.file) {
+      console.log('No file provided in upload request');
       return res.status(400).json({
         error: 'BadRequest',
         message: 'No file provided'
       });
     }
+
+    console.log('File uploaded successfully:', {
+      originalName: req.file.originalname,
+      filename: req.file.filename,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
 
     // In a production environment, you'd upload to cloud storage (AWS S3, Google Cloud Storage, etc.)
     // For now, we'll serve files statically from the uploads directory
