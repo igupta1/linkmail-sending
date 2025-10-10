@@ -199,26 +199,36 @@ router.get('/search-similar', async (req, res) => {
     try {
       const userProfileSql = `SELECT contacted_linkedins FROM user_profiles WHERE user_id = $1`;
       const userProfileRows = await query(userProfileSql, [userId]);
-      if (userProfileRows.rows.length > 0 && userProfileRows.rows[0].contacted_linkedins) {
-        // Create variants of each contacted URL (with and without trailing slash)
-        const urlSet = new Set();
-        userProfileRows.rows[0].contacted_linkedins.forEach(url => {
-          const lower = url.toLowerCase();
-          urlSet.add(lower);
-          // Add variant with/without trailing slash
-          if (lower.endsWith('/')) {
-            urlSet.add(lower.replace(/\/+$/, ''));
-          } else {
-            urlSet.add(`${lower}/`);
-          }
-        });
-        contactedLinkedins = Array.from(urlSet);
+      console.log(`[search-similar] User profile query returned ${userProfileRows.rows.length} rows for user ${userId}`);
+      
+      if (userProfileRows.rows.length > 0) {
+        const rawContactedLinkedins = userProfileRows.rows[0].contacted_linkedins;
+        console.log(`[search-similar] Raw contacted_linkedins from DB:`, rawContactedLinkedins);
+        
+        if (rawContactedLinkedins && Array.isArray(rawContactedLinkedins) && rawContactedLinkedins.length > 0) {
+          // Create variants of each contacted URL (with and without trailing slash)
+          const urlSet = new Set();
+          rawContactedLinkedins.forEach(url => {
+            const lower = url.toLowerCase();
+            urlSet.add(lower);
+            // Add variant with/without trailing slash
+            if (lower.endsWith('/')) {
+              urlSet.add(lower.replace(/\/+$/, ''));
+            } else {
+              urlSet.add(`${lower}/`);
+            }
+          });
+          contactedLinkedins = Array.from(urlSet);
+          console.log(`[search-similar] Created ${contactedLinkedins.length} URL variants:`, contactedLinkedins);
+        } else {
+          console.log(`[search-similar] No contacted linkedins found in user profile`);
+        }
       }
     } catch (error) {
-      console.warn('Could not fetch user contacted linkedins, proceeding without filtering:', error);
+      console.error('[search-similar] Error fetching user contacted linkedins:', error);
     }
 
-    console.log(`Excluding ${contactedLinkedins.length} contacted LinkedIn URL variants for user ${userId}`);
+    console.log(`[search-similar] Excluding ${contactedLinkedins.length} contacted LinkedIn URL variants for user ${userId}`);
 
     let results = [];
 
@@ -378,7 +388,8 @@ router.get('/search-similar', async (req, res) => {
       console.log(`Step 3 results: ${categoryResults.length}, total: ${results.length}`);
     }
 
-    console.log(`Search completed. Found ${results.length} results for category: "${category}", company: "${company}"`);
+    console.log(`[search-similar] Search completed. Found ${results.length} results for category: "${category}", company: "${company}"`);
+    console.log(`[search-similar] Returning results with LinkedIn URLs:`, results.map(r => ({ name: `${r.firstName} ${r.lastName}`, url: r.linkedinUrl })));
     return res.json({ results });
   } catch (err) {
     console.error('Search similar contacts error:', err);
