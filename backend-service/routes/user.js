@@ -284,55 +284,109 @@ router.put('/bio', [
   const userId = req.user.id;
   const { firstName, lastName, linkedinUrl, experiences, skills, templates, school, preferences } = req.body;
 
-  // Treat omitted fields as null so COALESCE preserves existing values
-  const sanitizedFirstName = typeof firstName === 'string' && firstName.trim().length > 0 ? firstName.trim() : null;
-  const sanitizedLastName = typeof lastName === 'string' && lastName.trim().length > 0 ? lastName.trim() : null;
-  const sanitizedLinkedIn = typeof linkedinUrl === 'string' && linkedinUrl.trim().length > 0 ? linkedinUrl.trim() : null;
-  const sanitizedSchool = typeof school === 'string' && school.trim().length > 0 ? school.trim() : null;
-  const sanitizedPreferences = typeof preferences === 'object' && preferences !== null ? JSON.stringify(preferences) : null;
+  // Build dynamic update query - only include fields that are provided
+  const updateFields = [];
+  const insertFields = ['user_id'];
+  const insertValues = [userId];
+  const insertPlaceholders = ['$1'];
+  let paramIndex = 2;
 
-  const experiencesJson = Array.isArray(experiences) ? JSON.stringify(experiences) : null;
-  const skillsArray = Array.isArray(skills) ? skills : null;
-  const templatesJson = Array.isArray(templates)
-    ? JSON.stringify(
-        templates.map(t => ({
-          icon: typeof t.icon === 'string' && t.icon.trim().length > 0 ? t.icon.trim() : '📝',
-          title: t.title || t.name || '',
-          body: t.body || t.content || '',
-          fileUrl: typeof t.fileUrl === 'string' && t.fileUrl.trim().length > 0 ? t.fileUrl.trim() : null,
-          strict_template: typeof t.strict_template === 'boolean' ? t.strict_template : false
-        }))
-      )
-    : null;
+  // Handle string fields
+  if (typeof firstName === 'string' && firstName.trim().length > 0) {
+    const value = firstName.trim();
+    updateFields.push(`first_name = $${paramIndex}`);
+    insertFields.push('first_name');
+    insertValues.push(value);
+    insertPlaceholders.push(`$${paramIndex}`);
+    paramIndex++;
+  }
+
+  if (typeof lastName === 'string' && lastName.trim().length > 0) {
+    const value = lastName.trim();
+    updateFields.push(`last_name = $${paramIndex}`);
+    insertFields.push('last_name');
+    insertValues.push(value);
+    insertPlaceholders.push(`$${paramIndex}`);
+    paramIndex++;
+  }
+
+  if (typeof linkedinUrl === 'string' && linkedinUrl.trim().length > 0) {
+    const value = linkedinUrl.trim();
+    updateFields.push(`linkedin_url = $${paramIndex}`);
+    insertFields.push('linkedin_url');
+    insertValues.push(value);
+    insertPlaceholders.push(`$${paramIndex}`);
+    paramIndex++;
+  }
+
+  if (typeof school === 'string' && school.trim().length > 0) {
+    const value = school.trim();
+    updateFields.push(`school = $${paramIndex}`);
+    insertFields.push('school');
+    insertValues.push(value);
+    insertPlaceholders.push(`$${paramIndex}`);
+    paramIndex++;
+  }
+
+  if (typeof preferences === 'object' && preferences !== null) {
+    const value = JSON.stringify(preferences);
+    updateFields.push(`preferences = $${paramIndex}::jsonb`);
+    insertFields.push('preferences');
+    insertValues.push(value);
+    insertPlaceholders.push(`$${paramIndex}::jsonb`);
+    paramIndex++;
+  }
+
+  // Handle array/object fields
+  if (Array.isArray(experiences)) {
+    const value = JSON.stringify(experiences);
+    updateFields.push(`experiences = $${paramIndex}::jsonb`);
+    insertFields.push('experiences');
+    insertValues.push(value);
+    insertPlaceholders.push(`$${paramIndex}::jsonb`);
+    paramIndex++;
+  }
+
+  if (Array.isArray(skills)) {
+    updateFields.push(`skills = $${paramIndex}::text[]`);
+    insertFields.push('skills');
+    insertValues.push(skills);
+    insertPlaceholders.push(`$${paramIndex}::text[]`);
+    paramIndex++;
+  }
+
+  if (Array.isArray(templates)) {
+    const value = JSON.stringify(
+      templates.map(t => ({
+        icon: typeof t.icon === 'string' && t.icon.trim().length > 0 ? t.icon.trim() : '📝',
+        title: t.title || t.name || '',
+        body: t.body || t.content || '',
+        fileUrl: typeof t.fileUrl === 'string' && t.fileUrl.trim().length > 0 ? t.fileUrl.trim() : null,
+        strict_template: typeof t.strict_template === 'boolean' ? t.strict_template : false
+      }))
+    );
+    updateFields.push(`templates = $${paramIndex}::jsonb`);
+    insertFields.push('templates');
+    insertValues.push(value);
+    insertPlaceholders.push(`$${paramIndex}::jsonb`);
+    paramIndex++;
+  }
+
+  // Add updated_at to update fields
+  if (updateFields.length > 0) {
+    updateFields.push('updated_at = NOW()');
+  }
 
   try {
     const upsertSql = `
-      INSERT INTO user_profiles (user_id, first_name, last_name, linkedin_url, experiences, skills, templates, school, preferences)
-      VALUES ($1, $2, $3, $4, $5::jsonb, $6::text[], $7::jsonb, $8, $9::jsonb)
+      INSERT INTO user_profiles (${insertFields.join(', ')})
+      VALUES (${insertPlaceholders.join(', ')})
       ON CONFLICT (user_id)
       DO UPDATE SET
-        first_name = COALESCE(EXCLUDED.first_name, user_profiles.first_name),
-        last_name = COALESCE(EXCLUDED.last_name, user_profiles.last_name),
-        linkedin_url = COALESCE(EXCLUDED.linkedin_url, user_profiles.linkedin_url),
-        experiences = COALESCE(EXCLUDED.experiences, user_profiles.experiences),
-        skills = COALESCE(EXCLUDED.skills, user_profiles.skills),
-        templates = COALESCE(EXCLUDED.templates, user_profiles.templates),
-        school = COALESCE(EXCLUDED.school, user_profiles.school),
-        preferences = COALESCE(EXCLUDED.preferences, user_profiles.preferences),
-        updated_at = NOW()
+        ${updateFields.join(', ')}
       RETURNING user_id, first_name, last_name, linkedin_url, experiences, skills, templates, contacted_linkedins, school, preferences, created_at, updated_at
     `;
-    const { rows } = await query(upsertSql, [
-      userId,
-      sanitizedFirstName,
-      sanitizedLastName,
-      sanitizedLinkedIn,
-      experiencesJson,
-      skillsArray,
-      templatesJson,
-      sanitizedSchool,
-      sanitizedPreferences
-    ]);
+    const { rows } = await query(upsertSql, insertValues);
     return res.json({ success: true, profile: rows[0] });
   } catch (error) {
     console.error('Error upserting user bio:', error);
