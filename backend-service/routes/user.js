@@ -4,6 +4,7 @@ const express = require('express');
 const { getUserSession, setUserSession, deleteUserSession } = require('../store');
 const { query } = require('../db');
 const { body, validationResult } = require('express-validator');
+const { canonicalizeLinkedInProfile } = require('../utils/linkedin-utils');
 
 const router = express.Router();
 
@@ -352,19 +353,26 @@ router.post('/contacted', [
   }
   const userId = req.user.id;
   const { linkedinUrl } = req.body;
+  
+  // Canonicalize the LinkedIn URL to match format stored in contacts table
+  const canonicalUrl = canonicalizeLinkedInProfile(linkedinUrl);
+  const normalizedUrl = (canonicalUrl || linkedinUrl).toLowerCase();
+  
+  console.log(`Adding contacted LinkedIn URL - Original: ${linkedinUrl}, Canonicalized: ${normalizedUrl}`);
+  
   try {
     const updateSql = `
       INSERT INTO user_profiles (user_id, contacted_linkedins)
-      VALUES ($1, ARRAY[LOWER($2)])
+      VALUES ($1, ARRAY[$2])
       ON CONFLICT (user_id)
       DO UPDATE SET
         contacted_linkedins = (
-          SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(user_profiles.contacted_linkedins, '{}') || ARRAY[LOWER(EXCLUDED.contacted_linkedins[1])]))
+          SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(user_profiles.contacted_linkedins, '{}') || ARRAY[EXCLUDED.contacted_linkedins[1]]))
         ),
         updated_at = NOW()
       RETURNING user_id, first_name, last_name, linkedin_url, experiences, skills, contacted_linkedins, school, preferences, created_at, updated_at
     `;
-    const { rows } = await query(updateSql, [userId, linkedinUrl]);
+    const { rows } = await query(updateSql, [userId, normalizedUrl]);
     return res.json({ success: true, profile: rows[0] });
   } catch (error) {
     console.error('Error updating contacted linkedins:', error);

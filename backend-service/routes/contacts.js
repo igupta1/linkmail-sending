@@ -4,54 +4,9 @@ const express = require('express');
 const { body, validationResult, query: vquery } = require('express-validator');
 const { getClient, query } = require('../db');
 const { cleanContactData } = require('../utils/contact-cleaner');
+const { canonicalizeLinkedInProfile, buildLinkedInUrlVariants } = require('../utils/linkedin-utils');
 
 const router = express.Router();
-
-// Helper to normalize and generate LinkedIn URL variants for robust matching
-function buildLinkedInUrlVariants(rawUrl) {
-  if (!rawUrl || typeof rawUrl !== 'string') return [];
-
-  const candidates = new Set();
-
-  const trimmed = rawUrl.trim();
-  const lower = trimmed.toLowerCase();
-  candidates.add(lower);
-
-  // Toggle trailing slash variants
-  if (lower.endsWith('/')) {
-    candidates.add(lower.replace(/\/+$/, ''));
-  } else {
-    candidates.add(`${lower}/`);
-  }
-
-  // Ensure scheme for URL parsing
-  const ensureScheme = (value) => (/^https?:\/\//i.test(value) ? value : `https://${value}`);
-
-  try {
-    const urlWithScheme = ensureScheme(lower);
-    const parsed = new URL(urlWithScheme);
-    // Normalize host to include or exclude www
-    const hostNoWww = parsed.host.replace(/^www\./, '');
-    const hostWithWww = hostNoWww.startsWith('www.') ? hostNoWww : `www.${hostNoWww}`;
-
-    // Drop query and hash, keep pathname only
-    const pathname = parsed.pathname.replace(/\/+$/, '');
-
-    const httpsBase = `https://${hostNoWww}${pathname}`;
-    const httpsBaseWww = `https://${hostWithWww}${pathname}`;
-
-    [httpsBase, `${httpsBase}/`, httpsBaseWww, `${httpsBaseWww}/`].forEach(v => candidates.add(v));
-
-    // Also include host+path without scheme variants
-    const noScheme = `${hostNoWww}${pathname}`;
-    const noSchemeWww = `${hostWithWww}${pathname}`;
-    [noScheme, `${noScheme}/`, noSchemeWww, `${noSchemeWww}/`].forEach(v => candidates.add(v));
-  } catch (e) {
-    // Ignore parsing errors, we still have basic variants
-  }
-
-  return Array.from(candidates);
-}
 
 // Normalize noisy company strings from LinkedIn (e.g., "Google · Full-time")
 function normalizeCompanyInput(rawCompany) {
@@ -68,26 +23,6 @@ function normalizeCompanyInput(rawCompany) {
   // Collapse multiple spaces, trim again
   value = value.replace(/\s+/g, ' ').trim();
   return value;
-}
-
-// Canonicalize to https://www.linkedin.com/in/{slug}/ (lowercased slug, https, www, no query/hash)
-function canonicalizeLinkedInProfile(rawUrl) {
-  if (!rawUrl || typeof rawUrl !== 'string') return null;
-  const input = rawUrl.trim();
-  if (!input) return null;
-  const ensureScheme = (value) => (/^https?:\/\//i.test(value) ? value : `https://${value}`);
-  try {
-    const parsed = new URL(ensureScheme(input));
-    const host = parsed.hostname.toLowerCase();
-    if (!host.endsWith('linkedin.com')) return null;
-    // Extract slug from /in/{slug}
-    const match = parsed.pathname.match(/\/in\/([A-Za-z0-9_-]+)/i);
-    if (!match) return null;
-    const slug = match[1].toLowerCase();
-    return `https://www.linkedin.com/in/${slug}/`;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -265,13 +200,25 @@ router.get('/search-similar', async (req, res) => {
       const userProfileSql = `SELECT contacted_linkedins FROM user_profiles WHERE user_id = $1`;
       const userProfileRows = await query(userProfileSql, [userId]);
       if (userProfileRows.rows.length > 0 && userProfileRows.rows[0].contacted_linkedins) {
-        contactedLinkedins = userProfileRows.rows[0].contacted_linkedins.map(url => url.toLowerCase());
+        // Create variants of each contacted URL (with and without trailing slash)
+        const urlSet = new Set();
+        userProfileRows.rows[0].contacted_linkedins.forEach(url => {
+          const lower = url.toLowerCase();
+          urlSet.add(lower);
+          // Add variant with/without trailing slash
+          if (lower.endsWith('/')) {
+            urlSet.add(lower.replace(/\/+$/, ''));
+          } else {
+            urlSet.add(`${lower}/`);
+          }
+        });
+        contactedLinkedins = Array.from(urlSet);
       }
     } catch (error) {
       console.warn('Could not fetch user contacted linkedins, proceeding without filtering:', error);
     }
 
-    console.log(`Excluding ${contactedLinkedins.length} contacted LinkedIn URLs for user ${userId}`);
+    console.log(`Excluding ${contactedLinkedins.length} contacted LinkedIn URL variants for user ${userId}`);
 
     let results = [];
 
@@ -470,13 +417,25 @@ router.get('/search', async (req, res) => {
       const userProfileSql = `SELECT contacted_linkedins FROM user_profiles WHERE user_id = $1`;
       const userProfileRows = await query(userProfileSql, [userId]);
       if (userProfileRows.rows.length > 0 && userProfileRows.rows[0].contacted_linkedins) {
-        contactedLinkedins = userProfileRows.rows[0].contacted_linkedins.map(url => url.toLowerCase());
+        // Create variants of each contacted URL (with and without trailing slash)
+        const urlSet = new Set();
+        userProfileRows.rows[0].contacted_linkedins.forEach(url => {
+          const lower = url.toLowerCase();
+          urlSet.add(lower);
+          // Add variant with/without trailing slash
+          if (lower.endsWith('/')) {
+            urlSet.add(lower.replace(/\/+$/, ''));
+          } else {
+            urlSet.add(`${lower}/`);
+          }
+        });
+        contactedLinkedins = Array.from(urlSet);
       }
     } catch (error) {
       console.warn('Could not fetch user contacted linkedins, proceeding without filtering:', error);
     }
 
-    console.log(`Excluding ${contactedLinkedins.length} contacted LinkedIn URLs for user ${userId} in search`);
+    console.log(`Excluding ${contactedLinkedins.length} contacted LinkedIn URL variants for user ${userId} in search`);
 
     // Build exclusion clause for contacted LinkedIn URLs
     const contactedExcludeClause = contactedLinkedins.length > 0 
