@@ -361,7 +361,8 @@ router.put('/bio', [
         icon: typeof t.icon === 'string' && t.icon.trim().length > 0 ? t.icon.trim() : '📝',
         title: t.title || t.name || '',
         body: t.body || t.content || '',
-        fileUrl: typeof t.fileUrl === 'string' && t.fileUrl.trim().length > 0 ? t.fileUrl.trim() : null,
+        subject: t.subject || t.title || t.name || 'Subject Line',
+        file: typeof t.file === 'string' && t.file.trim().length > 0 ? t.file.trim() : (typeof t.fileUrl === 'string' && t.fileUrl.trim().length > 0 ? t.fileUrl.trim() : null),
         strict_template: typeof t.strict_template === 'boolean' ? t.strict_template : false
       }))
     );
