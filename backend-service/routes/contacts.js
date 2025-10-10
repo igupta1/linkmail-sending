@@ -3,6 +3,7 @@
 const express = require('express');
 const { body, validationResult, query: vquery } = require('express-validator');
 const { getClient, query } = require('../db');
+const { cleanContactData } = require('../utils/contact-cleaner');
 
 const router = express.Router();
 
@@ -115,7 +116,7 @@ router.post('/', [
     return res.status(400).json({ error: 'Validation failed', details: errors.array() });
   }
 
-  const {
+  let {
     firstName,
     lastName,
     jobTitle = null,
@@ -127,6 +128,11 @@ router.post('/', [
     linkedinUrl: rawLinkedinUrl = null,
     emails
   } = req.body;
+
+  // Clean job title and company using LLM
+  const cleaned = await cleanContactData(jobTitle, company);
+  jobTitle = cleaned.jobTitle;
+  company = cleaned.company;
 
   const emailList = emails == null
     ? []
@@ -863,8 +869,14 @@ router.post('/apollo-email-search', [
         // Resolve best available identity fields
         const resolvedFirst = (person.first_name || firstName || '').toString().trim();
         const resolvedLast = (person.last_name || lastName || '').toString().trim();
-        const resolvedCompany = normalizeCompanyInput(person.organization?.name || company || '');
-        const resolvedTitle = (person.title || '').toString().trim();
+        const rawTitle = (person.title || '').toString().trim();
+        const rawCompany = person.organization?.name || company || '';
+        
+        // Clean job title and company using LLM
+        const cleanedData = await cleanContactData(rawTitle, rawCompany);
+        const resolvedTitle = cleanedData.jobTitle || rawTitle;
+        const resolvedCompany = normalizeCompanyInput(cleanedData.company || rawCompany);
+        
         const rawLinkedin = (person.linkedin_url || linkedinUrl || '').toString().trim();
         const canonical = canonicalizeLinkedInProfile(rawLinkedin);
 

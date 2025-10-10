@@ -20,6 +20,7 @@ const csv = require('csv-parser');
 require('dotenv').config();
 
 const { getClient, query } = require('../db');
+const { cleanContactData } = require('../utils/contact-cleaner');
 
 // Helper function to canonicalize LinkedIn profile URLs
 function canonicalizeLinkedInProfile(rawUrl) {
@@ -224,6 +225,9 @@ async function importContacts(contacts) {
           
           contactId = existingContact.id;
         } else {
+          // Clean job title and company before inserting
+          const cleaned = await cleanContactData(contact.jobTitle, contact.company);
+          
           // Insert new contact
           const insertSQL = `
             INSERT INTO contacts (first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url)
@@ -234,8 +238,8 @@ async function importContacts(contacts) {
           const { rows } = await client.query(insertSQL, [
             contact.firstName,
             contact.lastName,
-            contact.jobTitle,
-            contact.company,
+            cleaned.jobTitle || contact.jobTitle,  // Use cleaned or fallback to original
+            cleaned.company || contact.company,    // Use cleaned or fallback to original
             contact.city,
             contact.state,
             contact.country,

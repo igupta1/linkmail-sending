@@ -6,6 +6,7 @@ const { body, validationResult } = require('express-validator');
 const { getUserSession, setUserSession } = require('../store');
 const { getClient, query } = require('../db');
 const { findOrCreateConnection, addMessageToConnection } = require('./connections');
+const { cleanContactInfo } = require('../utils/contact-cleaner');
 
 const router = express.Router();
 
@@ -33,6 +34,9 @@ async function findOrCreateContactByEmail(email, contactInfo = {}) {
       return existingContacts[0];
     }
     
+    // Clean contact info using LLM before creating
+    const cleanedContactInfo = await cleanContactInfo(contactInfo);
+    
     // Create new contact if not found
     await client.query('BEGIN');
     
@@ -43,15 +47,15 @@ async function findOrCreateContactByEmail(email, contactInfo = {}) {
     `;
     
     const { rows: newContacts } = await client.query(insertContactSql, [
-      contactInfo.firstName || null,
-      contactInfo.lastName || null,
-      contactInfo.jobTitle || null,
-      contactInfo.company || null,
-      contactInfo.city || null,
-      contactInfo.state || null,
-      contactInfo.country || null,
+      cleanedContactInfo.firstName || null,
+      cleanedContactInfo.lastName || null,
+      cleanedContactInfo.jobTitle || null,
+      cleanedContactInfo.company || null,
+      cleanedContactInfo.city || null,
+      cleanedContactInfo.state || null,
+      cleanedContactInfo.country || null,
       false, // not verified by default
-      contactInfo.linkedinUrl || null
+      cleanedContactInfo.linkedinUrl || null
     ]);
     
     const newContact = newContacts[0];
