@@ -225,13 +225,13 @@ async function importContacts(contacts) {
           
           contactId = existingContact.id;
         } else {
-          // Clean job title and company before inserting
+          // Clean job title and company before inserting (also infers category)
           const cleaned = await cleanContactData(contact.jobTitle, contact.company);
           
           // Insert new contact
           const insertSQL = `
-            INSERT INTO contacts (first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO contacts (first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url, category)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id
           `;
           
@@ -244,7 +244,8 @@ async function importContacts(contacts) {
             contact.state,
             contact.country,
             true, // Mark as verified since from Apollo
-            contact.linkedinUrl
+            contact.linkedinUrl,
+            cleaned.category || null  // Use LLM-inferred category
           ]);
           
           contactId = rows[0].id;

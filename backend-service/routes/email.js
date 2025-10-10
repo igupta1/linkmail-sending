@@ -41,8 +41,8 @@ async function findOrCreateContactByEmail(email, contactInfo = {}) {
     await client.query('BEGIN');
     
     const insertContactSql = `
-      INSERT INTO contacts (first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO contacts (first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url, category)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
     
@@ -55,7 +55,8 @@ async function findOrCreateContactByEmail(email, contactInfo = {}) {
       cleanedContactInfo.state || null,
       cleanedContactInfo.country || null,
       false, // not verified by default
-      cleanedContactInfo.linkedinUrl || null
+      cleanedContactInfo.linkedinUrl || null,
+      cleanedContactInfo.category || null
     ]);
     
     const newContact = newContacts[0];

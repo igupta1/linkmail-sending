@@ -1,18 +1,20 @@
 # Contact Data Cleaner
 
-This utility uses LLM (OpenAI GPT-4o-mini) to clean and normalize job titles and company names scraped from LinkedIn profiles.
+This utility uses LLM (OpenAI GPT-4o-mini) to clean and normalize job titles, company names, and infer job categories from scraped LinkedIn profiles.
 
 ## Problem
 
 LinkedIn scraping often produces messy data:
 - Job Title: `"Recruiting at Notion - We're Hiring! Notion.so/careers"`
 - Company: `"Notion · Contract"`
+- Category: Unknown
 
 ## Solution
 
 The LLM automatically cleans this to:
 - Job Title: `"Recruiter"`
 - Company: `"Notion"`
+- Category: `"Recruiter"`
 
 ## Usage
 
@@ -35,7 +37,7 @@ const cleaned = await cleanContactData(
   "Recruiting at Notion - We're Hiring! Notion.so/careers",
   "Notion · Contract"
 );
-// Returns: { jobTitle: "Recruiter", company: "Notion" }
+// Returns: { jobTitle: "Recruiter", company: "Notion", category: "Recruiter" }
 
 // Clean a contact info object
 const contactInfo = {
@@ -45,7 +47,7 @@ const contactInfo = {
   company: "Google | Mountain View"
 };
 const cleanedInfo = await cleanContactInfo(contactInfo);
-// Returns: { firstName: "John", lastName: "Doe", jobTitle: "Software Engineer", company: "Google" }
+// Returns: { firstName: "John", lastName: "Doe", jobTitle: "Software Engineer", company: "Google", category: "Software Engineer" }
 ```
 
 ## Integration Points
@@ -79,14 +81,32 @@ The cleaner is designed to never break contact creation:
 - If JSON parsing fails, it returns original values
 - All errors are logged for debugging
 
+## Available Categories
+
+The LLM can infer these standardized categories:
+- **Recruiter** - Recruiting roles
+- **Software Engineer** - Software engineering roles
+- **Product Manager** - Product management roles
+- **Designer** - Design roles
+- **CEO** - Chief Executive Officer
+- **Founder** - Founders
+- **Co-Founder** - Co-founders
+- **Data Scientist** - Data science roles
+- **Analyst** - Analyst roles
+- **Consultant** - Consulting roles
+- **University Recruiter** - Campus/university recruiting
+- **Talent Acquisition** - Talent acquisition specialists
+- **Other** - Roles that don't fit standard categories
+
 ## Example Transformations
 
-| Before | After |
-|--------|-------|
-| `"Recruiting at Notion - We're Hiring!"` | `"Recruiter"` |
-| `"Software Engineering · Full-time"` | `"Software Engineer"` |
-| `"Product Manager at Google"` | `"Product Manager"` |
-| `"Notion · Contract"` | `"Notion"` |
-| `"Google \| Mountain View"` | `"Google"` |
-| `"OpenAI · Full-time"` | `"OpenAI"` |
+| Input Job Title | Cleaned Title | Cleaned Company | Inferred Category |
+|----------------|---------------|-----------------|-------------------|
+| `"Recruiting at Notion - We're Hiring!"` | `"Recruiter"` | `"Notion"` | `"Recruiter"` |
+| `"Software Engineering · Full-time"` | `"Software Engineer"` | - | `"Software Engineer"` |
+| `"Product Manager at Google"` | `"Product Manager"` | `"Google"` | `"Product Manager"` |
+| `"Senior UX Designer"` | `"Senior UX Designer"` | - | `"Designer"` |
+| `"Data Scientist at OpenAI"` | `"Data Scientist"` | `"OpenAI"` | `"Data Scientist"` |
+| `"Co-Founder & CEO"` | `"Co-Founder & CEO"` | - | `"Co-Founder"` |
+| `"Campus Recruiter at UCLA"` | `"Campus Recruiter"` | `"UCLA"` | `"University Recruiter"` |
 

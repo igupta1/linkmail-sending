@@ -129,10 +129,11 @@ router.post('/', [
     emails
   } = req.body;
 
-  // Clean job title and company using LLM
+  // Clean job title and company using LLM (also infers category)
   const cleaned = await cleanContactData(jobTitle, company);
   jobTitle = cleaned.jobTitle;
   company = cleaned.company;
+  const category = cleaned.category;
 
   const emailList = emails == null
     ? []
@@ -148,12 +149,12 @@ router.post('/', [
     await client.query('BEGIN');
 
     const insertContact = `
-      INSERT INTO contacts (first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id, first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url, created_at, updated_at
+      INSERT INTO contacts (first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url, category)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url, category, created_at, updated_at
     `;
     const contactResult = await client.query(insertContact, [
-      firstName, lastName, jobTitle, company, city, state, country, Boolean(isVerified), linkedinUrl
+      firstName, lastName, jobTitle, company, city, state, country, Boolean(isVerified), linkedinUrl, category
     ]);
     const contact = contactResult.rows[0];
 
@@ -872,10 +873,11 @@ router.post('/apollo-email-search', [
         const rawTitle = (person.title || '').toString().trim();
         const rawCompany = person.organization?.name || company || '';
         
-        // Clean job title and company using LLM
+        // Clean job title and company using LLM (also infers category)
         const cleanedData = await cleanContactData(rawTitle, rawCompany);
         const resolvedTitle = cleanedData.jobTitle || rawTitle;
         const resolvedCompany = normalizeCompanyInput(cleanedData.company || rawCompany);
+        const resolvedCategory = cleanedData.category;
         
         const rawLinkedin = (person.linkedin_url || linkedinUrl || '').toString().trim();
         const canonical = canonicalizeLinkedInProfile(rawLinkedin);
@@ -928,9 +930,9 @@ router.post('/apollo-email-search', [
         // Insert contact if not found
         if (!contactRow) {
           const insertSql = `
-            INSERT INTO contacts (first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url)
-            VALUES ($1, $2, $3, $4, NULL, NULL, NULL, $5, $6)
-            RETURNING id, first_name, last_name, job_title, company, linkedin_url, is_verified
+            INSERT INTO contacts (first_name, last_name, job_title, company, city, state, country, is_verified, linkedin_url, category)
+            VALUES ($1, $2, $3, $4, NULL, NULL, NULL, $5, $6, $7)
+            RETURNING id, first_name, last_name, job_title, company, linkedin_url, is_verified, category
           `;
           const { rows } = await client.query(insertSql, [
             resolvedFirst || null,
@@ -938,7 +940,8 @@ router.post('/apollo-email-search', [
             resolvedTitle || null,
             resolvedCompany || null,
             true,
-            canonical || (rawLinkedin || null)
+            canonical || (rawLinkedin || null),
+            resolvedCategory || null
           ]);
           contactRow = rows[0];
         } else {
@@ -949,6 +952,7 @@ router.post('/apollo-email-search', [
           if (resolvedTitle && !contactRow.job_title) { maybeUpdate.push(`job_title = $${idx++}`); params.push(resolvedTitle); }
           if (resolvedCompany && !contactRow.company) { maybeUpdate.push(`company = $${idx++}`); params.push(resolvedCompany); }
           if (canonical && !contactRow.linkedin_url) { maybeUpdate.push(`linkedin_url = $${idx++}`); params.push(canonical); }
+          if (resolvedCategory && !contactRow.category) { maybeUpdate.push(`category = $${idx++}`); params.push(resolvedCategory); }
           // Mark contact as verified because email came from Apollo
           maybeUpdate.push(`is_verified = TRUE`);
           if (maybeUpdate.length > 0) {

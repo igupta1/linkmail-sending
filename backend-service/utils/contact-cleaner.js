@@ -10,7 +10,7 @@
 async function cleanContactData(rawJobTitle, rawCompany) {
   // Skip cleaning if both fields are empty
   if (!rawJobTitle && !rawCompany) {
-    return { jobTitle: null, company: null };
+    return { jobTitle: null, company: null, category: null };
   }
 
   try {
@@ -21,11 +21,12 @@ async function cleanContactData(rawJobTitle, rawCompany) {
       console.warn('OPENAI_API_KEY not set, skipping contact data cleaning');
       return {
         jobTitle: rawJobTitle || null,
-        company: rawCompany || null
+        company: rawCompany || null,
+        category: null
       };
     }
 
-    const prompt = `You are a data cleaning assistant. Extract clean, professional job titles and company names from scraped LinkedIn data.
+    const prompt = `You are a data cleaning assistant. Extract clean, professional job titles, company names, and infer the job category from scraped LinkedIn data.
 
 Input:
 - Job Title: ${rawJobTitle || 'N/A'}
@@ -45,8 +46,16 @@ Rules:
    - Remove URLs and promotional text
    - If unclear or no company, return null
 
+3. For Category: Infer the job category based on the job title
+   - Choose from: "Recruiter", "Software Engineer", "Product Manager", "Designer", "CEO", "Founder", "Data Scientist", "Co-Founder", "Analyst", "Consultant", "University Recruiter", "Talent Acquisition", "Other"
+   - Use "University Recruiter" for campus/university recruiting roles
+   - Use "Co-Founder" for co-founder roles (not "Founder")
+   - Use "Talent Acquisition" for talent acquisition specialists
+   - Use "Other" if the job doesn't clearly fit any category
+   - If unclear or no job title, return null
+
 Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
-{"jobTitle": "cleaned job title or null", "company": "cleaned company or null"}`;
+{"jobTitle": "cleaned job title or null", "company": "cleaned company or null", "category": "category or null"}`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -77,7 +86,8 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
       // Return original values on error
       return {
         jobTitle: rawJobTitle || null,
-        company: rawCompany || null
+        company: rawCompany || null,
+        category: null
       };
     }
 
@@ -88,7 +98,8 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
       console.error('Empty response from OpenAI');
       return {
         jobTitle: rawJobTitle || null,
-        company: rawCompany || null
+        company: rawCompany || null,
+        category: null
       };
     }
 
@@ -102,31 +113,35 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
       console.error('Failed to parse OpenAI response:', content, parseError);
       return {
         jobTitle: rawJobTitle || null,
-        company: rawCompany || null
+        company: rawCompany || null,
+        category: null
       };
     }
 
     // Handle string "null" values
     const cleanedJobTitle = (cleaned.jobTitle === 'null' || cleaned.jobTitle === null) ? null : (cleaned.jobTitle || null);
     const cleanedCompany = (cleaned.company === 'null' || cleaned.company === null) ? null : (cleaned.company || null);
+    const cleanedCategory = (cleaned.category === 'null' || cleaned.category === null) ? null : (cleaned.category || null);
 
     // Log the cleaning for debugging
     console.log('Contact data cleaned:', {
       before: { jobTitle: rawJobTitle, company: rawCompany },
-      after: { jobTitle: cleanedJobTitle, company: cleanedCompany }
+      after: { jobTitle: cleanedJobTitle, company: cleanedCompany, category: cleanedCategory }
     });
 
     return {
       jobTitle: cleanedJobTitle,
-      company: cleanedCompany
+      company: cleanedCompany,
+      category: cleanedCategory
     };
 
   } catch (error) {
     console.error('Error cleaning contact data with LLM:', error);
-    // Return original values on error
+    // Return original values on error (no category inference)
     return {
       jobTitle: rawJobTitle || null,
-      company: rawCompany || null
+      company: rawCompany || null,
+      category: null
     };
   }
 }
@@ -134,7 +149,7 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
 /**
  * Clean contact info object
  * @param {Object} contactInfo - Contact info object with firstName, lastName, jobTitle, company, etc.
- * @returns {Promise<Object>} Contact info with cleaned jobTitle and company
+ * @returns {Promise<Object>} Contact info with cleaned jobTitle, company, and category
  */
 async function cleanContactInfo(contactInfo) {
   if (!contactInfo || typeof contactInfo !== 'object') {
@@ -153,7 +168,8 @@ async function cleanContactInfo(contactInfo) {
   return {
     ...rest,
     jobTitle: cleaned.jobTitle,
-    company: cleaned.company
+    company: cleaned.company,
+    category: cleaned.category
   };
 }
 
