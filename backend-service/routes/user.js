@@ -291,8 +291,8 @@ router.put('/bio', [
   const sanitizedSchool = typeof school === 'string' && school.trim().length > 0 ? school.trim() : null;
   const sanitizedPreferences = typeof preferences === 'object' && preferences !== null ? JSON.stringify(preferences) : null;
 
-  const experiencesJson = Array.isArray(experiences) ? JSON.stringify(experiences) : JSON.stringify([]);
-  const skillsArray = Array.isArray(skills) ? skills : [];
+  const experiencesJson = Array.isArray(experiences) ? JSON.stringify(experiences) : null;
+  const skillsArray = Array.isArray(skills) ? skills : null;
   const templatesJson = Array.isArray(templates)
     ? JSON.stringify(
         templates.map(t => ({
@@ -303,7 +303,7 @@ router.put('/bio', [
           strict_template: typeof t.strict_template === 'boolean' ? t.strict_template : false
         }))
       )
-    : JSON.stringify([]);
+    : null;
 
   try {
     const upsertSql = `
