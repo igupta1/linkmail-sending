@@ -283,6 +283,16 @@ router.put('/bio', [
 
   const userId = req.user.id;
   const { firstName, lastName, linkedinUrl, experiences, skills, templates, school, preferences } = req.body;
+  
+  // CRITICAL DEBUG: Log the raw request body to see what's being sent
+  console.log('=== [UserRoute PUT /bio] RAW REQUEST BODY ===');
+  console.log('userId:', userId);
+  console.log('req.body:', JSON.stringify(req.body, null, 2));
+  console.log('templates field:', templates);
+  if (Array.isArray(templates) && templates.length > 0) {
+    console.log('First template:', JSON.stringify(templates[0], null, 2));
+  }
+  console.log('========================================');
 
   // Build dynamic update query - only include fields that are provided
   const updateFields = [];
