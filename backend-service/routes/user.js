@@ -370,16 +370,34 @@ router.put('/bio', [
     console.log('[UserRoute] Received templates array:', JSON.stringify(templates, null, 2));
     
     const mappedTemplates = templates.map(t => {
-      const fileValue = typeof t.file === 'string' && t.file.trim().length > 0 
-        ? t.file.trim() 
-        : (typeof t.fileUrl === 'string' && t.fileUrl.trim().length > 0 ? t.fileUrl.trim() : null);
+      // Handle file field - support both string URL and object with {url, name, size}
+      let fileValue = null;
+      
+      if (t.file) {
+        if (typeof t.file === 'object' && t.file !== null) {
+          // New format: object with url, name, size
+          // Validate it has the required url field
+          if (t.file.url && typeof t.file.url === 'string' && t.file.url.trim().length > 0) {
+            fileValue = {
+              url: t.file.url.trim(),
+              name: t.file.name || 'Attachment',
+              size: typeof t.file.size === 'number' ? t.file.size : 0
+            };
+          }
+        } else if (typeof t.file === 'string' && t.file.trim().length > 0) {
+          // Old format: just a URL string - keep as string for backward compatibility
+          fileValue = t.file.trim();
+        }
+      } else if (typeof t.fileUrl === 'string' && t.fileUrl.trim().length > 0) {
+        // Legacy fileUrl field
+        fileValue = t.fileUrl.trim();
+      }
       
       console.log(`[UserRoute] Template "${t.title || 'Untitled'}":`, {
         hasFile: !!t.file,
         fileType: typeof t.file,
         fileValue: t.file,
         hasFileUrl: !!t.fileUrl,
-        fileUrlValue: t.fileUrl,
         finalFileValue: fileValue
       });
       
