@@ -278,12 +278,10 @@ router.post('/send', [
       });
     }
 
-    // Get Gmail client
+    // Get Gmail client (send-only scope is sufficient)
     const gmail = await getGmailClient(userId);
-
-    // Get user profile for the From header
-    const profileResponse = await gmail.users.getProfile({ userId: 'me' });
-    const userEmail = profileResponse.data.emailAddress;
+    // Use email from session; avoid Gmail read APIs when only gmail.send scope is granted
+    const userEmail = userSession.email;
 
     // Process attachments - fetch files from URLs if needed
     const processedAttachments = [];
@@ -461,29 +459,23 @@ router.get('/profile', async (req, res) => {
   const userId = req.user.id;
 
   try {
-    const gmail = getGmailClient(userId);
-    const profileResponse = await gmail.users.getProfile({ userId: 'me' });
+    const userSession = await getUserSession(userId);
+    if (!userSession) {
+      return res.status(401).json({
+        error: 'Session not found',
+        message: 'Please sign in again'
+      });
+    }
 
     res.json({
       success: true,
       profile: {
-        emailAddress: profileResponse.data.emailAddress,
-        messagesTotal: profileResponse.data.messagesTotal,
-        threadsTotal: profileResponse.data.threadsTotal,
-        historyId: profileResponse.data.historyId
+        emailAddress: userSession.email
       }
     });
 
   } catch (error) {
     console.error('Error fetching Gmail profile:', error);
-    
-    if (error.code === 401) {
-      return res.status(401).json({
-        error: 'Gmail authentication failed',
-        message: 'Please reconnect your Google account'
-      });
-    }
-
     res.status(500).json({
       error: 'Failed to fetch Gmail profile',
       message: 'An error occurred while retrieving your Gmail profile'
