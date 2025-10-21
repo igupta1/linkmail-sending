@@ -8,16 +8,16 @@ DECLARE
         {
             "icon": "☕",
             "title": "Coffee Chat Request",
-            "subject": "Coffee Chat Request",
-            "body": "Hi [Recipient First Name],\n\n[Mention something specific about recipient company or recent work that interests me].\n\nI''d love to connect and learn more about your experience in [mention recipient field/industry]. Would you be open to a brief coffee chat?\n\nBest regards,\n[My Name]",
+            "subject": "Would love to learn more about [Recipient Company]!",
+            "body": "Hi [Recipient First Name],\n\nI''m [My First Name]]. I''m interested in [Recipient Company] because [Mention something specific about the recipient''s current company that is interesting].\n\nIf you have a moment, I''d love to learn more about your experience and/or hop on a brief call?\n\nBest regards,\n[My First Name]",
             "file": null,
             "strict_template": false
         },
         {
             "icon": "💼",
             "title": "Inquire About Open Roles",
-            "subject": "Wondering About Potential Opportunities at [Recipient Company Name]",
-            "body": "Hi [Recipient First Name],\n\nI''m [brief personal introduction including my background]. I''m really impressed by [mention something specific about recipient company''s work or mission].\n\n[Connect recipient company''s work to my own experience or interests]. I''d love to learn about potential opportunities at [Recipient Company Name].\n\nBest regards,\n[My Name]",
+            "subject": "Wondering About Potential Opportunities at [Recipient Company]",
+            "body": "Hi [Recipient First Name],\n\nI''m [My First Name]]. I''d love to work at [Recipient Company] because [Mention something specific about the recipient''s current company that is interesting].\n\n. I''d love to learn about potential opportunities at [Recipient Company].\n\nBest regards,\n[My First Name]",
             "file": null,
             "strict_template": false
         }
