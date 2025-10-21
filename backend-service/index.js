@@ -14,6 +14,7 @@ const { authenticateToken } = require('./middleware/auth');
 const contactsRoutes = require('./routes/contacts');
 const { router: connectionsRoutes } = require('./routes/connections');
 const uploadRoutes = require('./routes/upload');
+const chatRoutes = require('./routes/chat');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -99,6 +100,7 @@ app.use('/api/user', authenticateToken, userRoutes);
 app.use('/api/contacts', authenticateToken, contactsRoutes);
 app.use('/api/connections', authenticateToken, connectionsRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/chat', authenticateToken, chatRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
