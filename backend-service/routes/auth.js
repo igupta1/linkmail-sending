@@ -133,7 +133,7 @@ router.get('/google/callback', async (req, res) => {
         <head>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>LinkMail - Extension Setup</title>
+          <title>Linkmail Success</title>
           <style>
             /* Minimal, theme-aligned styling */
             :root { --bg: #F8FAFC; --fg: #ffffff; --text: #202020; --muted: #00000094; --accent: #0B66C2; }

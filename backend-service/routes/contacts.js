@@ -1067,6 +1067,160 @@ router.post('/apollo-email-search', [
 });
 
 /**
+ * GET /api/contacts/search-by-category
+ * Query: category, limit (optional, default 3)
+ * Returns random contacts from the specified category
+ * Excludes contacts that the user has already contacted
+ */
+router.get('/search-by-category', async (req, res) => {
+  // Prevent caching to ensure fresh results every time
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  
+  try {
+    const rawCategory = (req.query.category || '').toString();
+    const rawLimit = (req.query.limit || '3').toString();
+
+    const category = rawCategory.trim();
+    const limit = parseInt(rawLimit, 10);
+
+    if (!category) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: 'Category is required'
+      });
+    }
+
+    if (isNaN(limit) || limit < 1 || limit > 10) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: 'Limit must be a number between 1 and 10'
+      });
+    }
+
+    // Get user's contacted LinkedIn URLs to exclude from recommendations
+    const userId = req.user.id;
+    let contactedLinkedins = [];
+    try {
+      const userProfileSql = `SELECT contacted_linkedins FROM user_profiles WHERE user_id = $1`;
+      const userProfileRows = await query(userProfileSql, [userId]);
+      console.log(`[search-by-category] User profile query returned ${userProfileRows.rows.length} rows for user ${userId}`);
+      
+      if (userProfileRows.rows.length > 0) {
+        const rawContactedLinkedins = userProfileRows.rows[0].contacted_linkedins;
+        console.log(`[search-by-category] Raw contacted_linkedins from DB:`, rawContactedLinkedins);
+        
+        if (rawContactedLinkedins && Array.isArray(rawContactedLinkedins) && rawContactedLinkedins.length > 0) {
+          // Create variants of each contacted URL (trailing slash + http/https)
+          const urlSet = new Set();
+          rawContactedLinkedins.forEach(url => {
+            const lower = url.toLowerCase();
+            
+            // Add original
+            urlSet.add(lower);
+            
+            // Add variant with/without trailing slash
+            const withoutSlash = lower.replace(/\/+$/, '');
+            const withSlash = withoutSlash + '/';
+            urlSet.add(withoutSlash);
+            urlSet.add(withSlash);
+            
+            // Add http/https variants
+            if (lower.startsWith('https://')) {
+              const httpVersion = lower.replace('https://', 'http://');
+              urlSet.add(httpVersion);
+              urlSet.add(httpVersion.replace(/\/+$/, ''));
+              urlSet.add(httpVersion.replace(/\/+$/, '') + '/');
+            } else if (lower.startsWith('http://')) {
+              const httpsVersion = lower.replace('http://', 'https://');
+              urlSet.add(httpsVersion);
+              urlSet.add(httpsVersion.replace(/\/+$/, ''));
+              urlSet.add(httpsVersion.replace(/\/+$/, '') + '/');
+            }
+          });
+          contactedLinkedins = Array.from(urlSet);
+          console.log(`[search-by-category] Created ${contactedLinkedins.length} URL variants:`, contactedLinkedins);
+        } else {
+          console.log(`[search-by-category] No contacted linkedins found in user profile`);
+        }
+      }
+    } catch (error) {
+      console.error('[search-by-category] Error fetching user contacted linkedins:', error);
+    }
+
+    console.log(`[search-by-category] Excluding ${contactedLinkedins.length} contacted LinkedIn URL variants for user ${userId}`);
+
+    // Build exclusion clause for contacted LinkedIn URLs
+    const contactedExcludeClause = contactedLinkedins.length > 0 
+      ? `AND (linkedin_url IS NULL OR LOWER(linkedin_url) <> ALL($2))`
+      : '';
+
+    // Search for random contacts in the specified category
+    let categorySearchSql;
+    let categoryParams;
+    
+    if (contactedLinkedins.length > 0) {
+      categorySearchSql = `
+        SELECT id,
+               first_name,
+               last_name,
+               job_title,
+               company,
+               category,
+               linkedin_url
+        FROM contacts
+        WHERE LOWER(category) = LOWER($1)
+          AND (linkedin_url IS NULL OR LOWER(linkedin_url) <> ALL($2))
+        ORDER BY RANDOM(),
+                 (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
+                 is_verified DESC,
+                 updated_at DESC
+        LIMIT $3
+      `;
+      categoryParams = [category, contactedLinkedins, limit];
+    } else {
+      categorySearchSql = `
+        SELECT id,
+               first_name,
+               last_name,
+               job_title,
+               company,
+               category,
+               linkedin_url
+        FROM contacts
+        WHERE LOWER(category) = LOWER($1)
+        ORDER BY RANDOM(),
+                 (linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0) DESC,
+                 is_verified DESC,
+                 updated_at DESC
+        LIMIT $2
+      `;
+      categoryParams = [category, limit];
+    }
+    const categoryRows = await query(categorySearchSql, categoryParams);
+    
+    const results = categoryRows.rows.map(r => ({
+      id: r.id,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      jobTitle: r.job_title,
+      company: r.company,
+      category: r.category || null,
+      linkedinUrl: r.linkedin_url || null,
+      matchType: 'category_only'
+    }));
+
+    console.log(`[search-by-category] Search completed. Found ${results.length} results for category: "${category}"`);
+    console.log(`[search-by-category] Returning results with LinkedIn URLs:`, results.map(r => ({ name: `${r.firstName} ${r.lastName}`, url: r.linkedinUrl })));
+    return res.json({ results });
+  } catch (err) {
+    console.error('Search by category error:', err);
+    return res.status(500).json({ error: 'InternalError', message: 'Failed to search contacts by category' });
+  }
+});
+
+/**
  * GET /api/contacts/autocomplete
  * Query: type (jobTitle|company), q (search query)
  * Returns autocomplete suggestions for job titles or companies
