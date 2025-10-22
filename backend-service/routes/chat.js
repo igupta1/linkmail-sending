@@ -1,4 +1,5 @@
 const express = require('express');
+const { query } = require('../db');
 
 const router = express.Router();
 
@@ -7,6 +8,7 @@ const router = express.Router();
 router.post('/generate', async (req, res) => {
   try {
     const { prompt, context } = req.body || {};
+    const userId = req.user.id;
 
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
       return res.status(400).json({
@@ -24,6 +26,9 @@ router.post('/generate', async (req, res) => {
       });
     }
 
+    // Fetch user profile data for better personalization
+    const userProfile = await fetchUserProfile(userId);
+
     // Prepare a focused system prompt for drafting outreach messages
     const systemPrompt = [
       'You are LinkMail, an expert assistant that drafts concise, high-converting outreach emails and DMs.',
@@ -31,6 +36,7 @@ router.post('/generate', async (req, res) => {
       '- Matches a professional, human tone',
       '- Is concise (5-8 sentences max)',
       '- Personalizes with provided context when helpful',
+      '- Uses the sender\'s background and experience to add credibility',
       '- Avoids exaggerated claims and buzzwords',
       '- Ends with a single, specific call-to-action',
       '',
@@ -42,7 +48,7 @@ router.post('/generate', async (req, res) => {
     // Build messages array for Chat Completions
     const messages = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: buildUserContent(prompt, context) }
+      { role: 'user', content: buildUserContent(prompt, context, userProfile) }
     ];
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -92,17 +98,69 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-function buildUserContent(prompt, context) {
+async function fetchUserProfile(userId) {
+  try {
+    const sql = `
+      SELECT user_id,
+             first_name,
+             last_name,
+             linkedin_url,
+             experiences,
+             skills,
+             school,
+             preferences
+      FROM user_profiles
+      WHERE user_id = $1
+    `;
+    const { rows } = await query(sql, [userId]);
+    return rows.length > 0 ? rows[0] : null;
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return null;
+  }
+}
+
+function buildUserContent(prompt, context, userProfile) {
   const parts = [
     `Purpose/Message: ${String(prompt).trim()}`
   ];
 
+  // Add user profile context for better personalization
+  if (userProfile) {
+    const profileContext = [];
+    
+    if (userProfile.first_name || userProfile.last_name) {
+      const name = `${userProfile.first_name || ''} ${userProfile.last_name || ''}`.trim();
+      if (name) profileContext.push(`Sender: ${name}`);
+    }
+    
+    if (userProfile.school) {
+      profileContext.push(`Education: ${userProfile.school}`);
+    }
+    
+    if (userProfile.experiences && Array.isArray(userProfile.experiences) && userProfile.experiences.length > 0) {
+      const recentExperience = userProfile.experiences[0];
+      if (recentExperience.company && recentExperience.job_title) {
+        profileContext.push(`Current Role: ${recentExperience.job_title} at ${recentExperience.company}`);
+      }
+    }
+    
+    if (userProfile.skills && Array.isArray(userProfile.skills) && userProfile.skills.length > 0) {
+      const topSkills = userProfile.skills.slice(0, 5).join(', ');
+      profileContext.push(`Key Skills: ${topSkills}`);
+    }
+    
+    if (profileContext.length > 0) {
+      parts.push('Sender Background:', ...profileContext);
+    }
+  }
+
   if (typeof context !== 'undefined' && context !== null) {
     try {
       const serialized = JSON.stringify(context, null, 2);
-      parts.push('Context:', serialized);
+      parts.push('Additional Context:', serialized);
     } catch (_) {
-      parts.push('Context provided but could not be serialized.');
+      parts.push('Additional context provided but could not be serialized.');
     }
   }
 

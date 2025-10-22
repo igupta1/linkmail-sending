@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>LinkMail - Extension Setup</title>
+          <style>
+            /* Minimal, theme-aligned styling */
+            :root { --bg: #F8FAFC; --fg: #ffffff; --text: #202020; --muted: #00000094; --accent: #0B66C2; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            html, body { height: 100%; }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+              background: var(--bg);
+              color: var(--text);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 24px;
+            }
+            .card {
+              background: var(--fg);
+              border-radius: 24px; /* rounded-3xl */
+              width: 100%;
+              max-width: 400px;
+              padding: 36px;
+              text-align: center;
+              border: 1px solid rgba(0,0,0,0.08);
+              box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+            }
+            .logo {
+              display: block;
+              width: 56px;
+              height: 56px;
+              margin: 4px auto 16px auto;
+              object-fit: contain;
+              margin-bottom:48px;
+            }
+            .hint { 
+                font-size: 12px; 
+                color: var(--muted);
+                opacity: 0.65;
+            }
+
+            h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 8px; }
+            p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+            .mt-3 { margin-top: 12px; }
+            .mt-4 { margin-top: 16px; }
+            .mt-6 { margin-top: 24px; }
+            .btn {
+              cursor: pointer;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+              border: 1px solid rgba(0,0,0,0.08);
+              background: #0B66C2;
+              color: #ffffff;
+              padding: 6px 16px;
+              border-radius: 10px;
+              font-weight: 500;
+              font-size: 14px;
+              transition: background 120ms ease, transform 120ms ease;
+            }
+            a {
+                cursor: pointer;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+              border: 1px solid rgba(0,0,0,0.08);
+              background: #f5f5f5;
+              color: #626262;
+              padding: 6px 16px;
+              border-radius: 10px;
+              font-weight: 400;
+              font-size: 14px;
+              transition: background 120ms ease, transform 120ms ease;
+              text-decoration: none;
+            }
+            .btn:hover { background: #116fce; }
+            .btn:active { transform: translateY(1px); }
+            .hint { font-size: 12px; color: var(--muted); }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <img class="logo" alt="LinkMail logo" src="https://i.imgur.com/8KeJWZl.png" />
+            <h1>Linkmail is Ready</h1>
+            <p class="mt-6">You should now be able to use Linkmail to outreach on LinkedIn. Time to lock in!</p>
+            <div class="mt-6" style="display:flex; justify-content:center; gap:8px;">
+              <button class="btn" onclick="window.close()">Begin</button>
+              <a href="mailto:jaysontian@g.ucla.edu">Contact Us</a>
+            </div>
+          </div>
+          <script>
+            // Silently notify extension with token
+            fetch('/api/auth/extension-token', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: '${jwtToken}', userData: ${JSON.stringify(userData)} })
+            }).catch(() => {});
+          </script>
+        </body>
+        </html>

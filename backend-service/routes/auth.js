@@ -131,251 +131,106 @@ router.get('/google/callback', async (req, res) => {
         <!DOCTYPE html>
         <html lang="en">
         <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>LinkMail - Authentication Successful</title>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>LinkMail - Extension Setup</title>
           <style>
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            
+            /* Minimal, theme-aligned styling */
+            :root { --bg: #F8FAFC; --fg: #ffffff; --text: #202020; --muted: #00000094; --accent: #0B66C2; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            html, body { height: 100%; }
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              min-height: 100vh;
+              background: var(--bg);
+              color: var(--text);
               display: flex;
               align-items: center;
               justify-content: center;
-              padding: 20px;
-            }
-            
-            .container {
-              background: white;
-              border-radius: 16px;
-              box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-              max-width: 500px;
-              width: 100%;
-              padding: 48px 40px;
-              text-align: center;
-              animation: slideUp 0.5s ease-out;
-            }
-            
-            @keyframes slideUp {
-              from {
-                opacity: 0;
-                transform: translateY(30px);
-              }
-              to {
-                opacity: 1;
-                transform: translateY(0);
-              }
-            }
-            
-            @keyframes checkmark {
-              0% {
-                stroke-dashoffset: 100;
-              }
-              100% {
-                stroke-dashoffset: 0;
-              }
-            }
-            
-            @keyframes circle {
-              0% {
-                stroke-dashoffset: 166;
-              }
-              100% {
-                stroke-dashoffset: 0;
-              }
-            }
-            
-            @keyframes fadeIn {
-              from {
-                opacity: 0;
-              }
-              to {
-                opacity: 1;
-              }
-            }
-            
-            .logo-container {
-              width: 80px;
-              height: 80px;
-              margin: 0 auto 24px;
-              background: #0B66C2;
-              border-radius: 16px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              box-shadow: 0 8px 16px rgba(11, 102, 194, 0.2);
-            }
-            
-            .logo-icon {
-              width: 48px;
-              height: 48px;
-            }
-            
-            .success-icon {
-              width: 80px;
-              height: 80px;
-              margin: 0 auto 24px;
-              position: relative;
-              animation: fadeIn 0.5s ease-out 0.3s backwards;
-            }
-            
-            .success-circle {
-              stroke: #10b981;
-              stroke-width: 3;
-              fill: none;
-              stroke-dasharray: 166;
-              stroke-dashoffset: 166;
-              animation: circle 0.6s ease-out 0.3s forwards;
-            }
-            
-            .success-check {
-              stroke: #10b981;
-              stroke-width: 3;
-              fill: none;
-              stroke-linecap: round;
-              stroke-linejoin: round;
-              stroke-dasharray: 100;
-              stroke-dashoffset: 100;
-              animation: checkmark 0.3s ease-out 0.6s forwards;
-            }
-            
-            h1 {
-              color: #1f2937;
-              font-size: 28px;
-              font-weight: 700;
-              margin-bottom: 12px;
-              animation: fadeIn 0.5s ease-out 0.4s backwards;
-            }
-            
-            .subtitle {
-              color: #6b7280;
-              font-size: 16px;
-              line-height: 1.6;
-              margin-bottom: 32px;
-              animation: fadeIn 0.5s ease-out 0.5s backwards;
-            }
-            
-            .info-box {
-              background: #f3f4f6;
-              border-radius: 12px;
               padding: 24px;
-              margin-bottom: 24px;
-              text-align: left;
-              animation: fadeIn 0.5s ease-out 0.6s backwards;
             }
-            
-            .info-box h3 {
-              color: #1f2937;
-              font-size: 14px;
-              font-weight: 600;
-              margin-bottom: 16px;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
+            .card {
+              background: var(--fg);
+              border-radius: 24px; /* rounded-3xl */
+              width: 100%;
+              max-width: 400px;
+              padding: 36px;
+              text-align: center;
+              border: 1px solid rgba(0,0,0,0.08);
+              box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
             }
-            
-            .steps {
-              list-style: none;
-              counter-reset: step-counter;
+            .logo {
+              display: block;
+              width: 56px;
+              height: 56px;
+              margin: 4px auto 16px auto;
+              object-fit: contain;
+              margin-bottom:48px;
             }
-            
-            .steps li {
-              counter-increment: step-counter;
-              position: relative;
-              padding-left: 36px;
-              margin-bottom: 12px;
-              color: #4b5563;
-              font-size: 14px;
-              line-height: 1.5;
+            .hint { 
+                font-size: 12px; 
+                color: var(--muted);
+                opacity: 0.65;
             }
-            
-            .steps li:last-child {
-              margin-bottom: 0;
-            }
-            
-            .steps li::before {
-              content: counter(step-counter);
-              position: absolute;
-              left: 0;
-              top: 0;
-              width: 24px;
-              height: 24px;
-              background: #0B66C2;
-              color: white;
-              border-radius: 50%;
-              display: flex;
+
+            h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 8px; }
+            p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+            .mt-3 { margin-top: 12px; }
+            .mt-4 { margin-top: 16px; }
+            .mt-6 { margin-top: 24px; }
+            .btn {
+              cursor: pointer;
+              display: inline-flex;
               align-items: center;
               justify-content: center;
-              font-size: 12px;
-              font-weight: 600;
-            }
-            
-            .footer-text {
-              margin-top: 32px;
-              color: #6b7280;
-              font-size: 14px;
+              gap: 8px;
+              border: 1px solid rgba(0,0,0,0.08);
+              background: #0B66C2;
+              color: #ffffff;
+              padding: 6px 16px;
+              border-radius: 10px;
               font-weight: 500;
-              animation: fadeIn 0.5s ease-out 0.7s backwards;
+              font-size: 14px;
+              transition: background 120ms ease, transform 120ms ease;
             }
+            a {
+                cursor: pointer;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+              border: 1px solid rgba(0,0,0,0.08);
+              background: #f5f5f5;
+              color: #626262;
+              padding: 6px 16px;
+              border-radius: 10px;
+              font-weight: 400;
+              font-size: 14px;
+              transition: background 120ms ease, transform 120ms ease;
+              text-decoration: none;
+            }
+            .btn:hover { background: #116fce; }
+            .btn:active { transform: translateY(1px); }
+            .hint { font-size: 12px; color: var(--muted); }
           </style>
         </head>
         <body>
-          <div class="container">
-            <div class="logo-container">
-              <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4 4 L20 4 L20 8 L16 12 L16 20 L8 20 L8 12 L4 8 Z" fill="white"/>
-              </svg>
+          <div class="card">
+            <img class="logo" alt="LinkMail logo" src="https://i.imgur.com/8KeJWZl.png" />
+            <h1>Linkmail is Ready</h1>
+            <p class="mt-6">You should now be able to use Linkmail to outreach on LinkedIn. Time to lock in!</p>
+            <div class="mt-6" style="display:flex; justify-content:center; gap:8px;">
+              <button class="btn" onclick="window.close()">Begin</button>
+              <a href="mailto:jaysontian@g.ucla.edu">Contact Us</a>
             </div>
-            
-            <svg class="success-icon" viewBox="0 0 80 80">
-              <circle class="success-circle" cx="40" cy="40" r="26"/>
-              <path class="success-check" d="M25 40 L35 50 L55 30"/>
-            </svg>
-            
-            <h1>Authentication Successful!</h1>
-            <p class="subtitle">You have successfully signed in to LinkMail.<br>You can now close this tab and return to LinkedIn.</p>
-            
-            <div class="info-box">
-              <h3>Next Steps</h3>
-              <ol class="steps">
-                <li>Close this browser tab</li>
-                <li>Return to LinkedIn</li>
-                <li>The extension is now ready to use</li>
-              </ol>
-            </div>
-            
-            <p class="footer-text">Please close this tab and return to LinkedIn</p>
           </div>
-          
           <script>
-            // Store token for extension
-            console.log('LinkMail: Storing token for extension...');
-            
+            // Silently notify extension with token
             fetch('/api/auth/extension-token', {
               method: 'POST',
               credentials: 'include',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                token: '${jwtToken}',
-                userData: ${JSON.stringify(userData)}
-              })
-            }).then(response => {
-              console.log('LinkMail: Extension token endpoint response status:', response.status);
-              return response.json();
-            }).then(data => {
-              console.log('LinkMail: Extension token stored successfully:', data);
-              console.log('LinkMail: Extension should detect authentication now');
-            }).catch(err => {
-              console.error('LinkMail: Failed to store extension token:', err);
-              console.error('LinkMail: This means the extension will not detect authentication');
-            });
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: '${jwtToken}', userData: ${JSON.stringify(userData)} })
+            }).catch(() => {});
           </script>
         </body>
         </html>
