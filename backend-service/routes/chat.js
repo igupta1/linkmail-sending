@@ -40,7 +40,15 @@ router.post('/generate', async (req, res) => {
       '- Avoids exaggerated claims and buzzwords',
       '- Ends with a single, specific call-to-action',
       '',
-      'Return only the draft message body; do not include surrounding quotes or extra commentary.'
+      'Format your response as JSON with exactly two fields:',
+      '{ "subject": "Your subject line here", "body": "Your email body here" }',
+      '',
+      'The subject line should be:',
+      '- Attention-grabbing and personalized',
+      '- Short (5-8 words)',
+      '- Professional and relevant to the purpose',
+      '',
+      'Return ONLY valid JSON without any additional text, markdown formatting, or code blocks.'
     ].join('\n');
 
     const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
@@ -84,8 +92,27 @@ router.post('/generate', async (req, res) => {
       });
     }
 
+    // Parse JSON response to extract subject and body
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(content);
+    } catch (parseError) {
+      // If JSON parsing fails, treat the content as body with a default subject
+      console.error('Failed to parse LLM response as JSON:', parseError);
+      parsedContent = {
+        subject: 'Quick Question',
+        body: content
+      };
+    }
+
+    // Validate that we have both subject and body
+    const subject = parsedContent?.subject?.trim() || 'Quick Question';
+    const body = parsedContent?.body?.trim() || content;
+
     return res.json({
-      draft: content,
+      subject,
+      body,
+      draft: body, // Keep for backward compatibility
       model,
       usage: data?.usage || null
     });
