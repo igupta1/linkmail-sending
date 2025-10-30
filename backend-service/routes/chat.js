@@ -48,6 +48,9 @@ router.post('/generate', async (req, res) => {
       '- Short (5-8 words)',
       '- Professional and relevant to the purpose',
       '',
+      'If a Sender name is provided in the context, use that exact name in any self-introduction and in the sign-off. Do not invent or alter it.',
+      'Never output placeholders like "[Not specified]" or "[Not Specified]". If a piece of information is missing, omit it rather than writing a placeholder.',
+      '',
       'Return ONLY valid JSON without any additional text, markdown formatting, or code blocks.'
     ].join('\n');
 
@@ -106,8 +109,14 @@ router.post('/generate', async (req, res) => {
     }
 
     // Validate that we have both subject and body
-    const subject = parsedContent?.subject?.trim() || 'Quick Question';
-    const body = parsedContent?.body?.trim() || content;
+    let subject = parsedContent?.subject?.trim() || 'Quick Question';
+    let body = parsedContent?.body?.trim() || content;
+
+    // If user profile has a name, ensure placeholders are replaced with their real name
+    const senderName = `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim();
+    if (senderName) {
+      body = body.replace(/\[Not specified\]|\[Not Specified\]/gi, senderName);
+    }
 
     return res.json({
       subject,
