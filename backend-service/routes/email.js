@@ -82,8 +82,25 @@ async function findOrCreateContactByEmail(email, contactInfo = {}) {
       return existingContacts[0];
     }
     
-    // Clean contact info using LLM before creating
-    const cleanedContactInfo = await cleanContactInfo(contactInfo);
+    // Clean contact info using LLM before creating (make this non-blocking)
+    let cleanedContactInfo = contactInfo;
+    try {
+      cleanedContactInfo = await cleanContactInfo(contactInfo);
+    } catch (cleanError) {
+      console.warn('LLM cleaning failed, using raw contact info:', cleanError);
+      // Fallback to raw contact info if cleaning fails
+      cleanedContactInfo = {
+        firstName: contactInfo.firstName || null,
+        lastName: contactInfo.lastName || null,
+        jobTitle: contactInfo.jobTitle || null,
+        company: contactInfo.company || null,
+        city: contactInfo.city || null,
+        state: contactInfo.state || null,
+        country: contactInfo.country || null,
+        linkedinUrl: contactInfo.linkedinUrl || null,
+        category: null
+      };
+    }
     
     // Create new contact if not found
     await client.query('BEGIN');
