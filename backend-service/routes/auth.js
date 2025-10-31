@@ -139,6 +139,60 @@ router.get('/google/callback', async (req, res) => {
       console.error('Upsert minimal user profile failed (non-fatal):', e?.message || e);
     }
 
+    // Track referral if present
+    if (stateData.ref && process.env.DATABASE_URL) {
+      try {
+        const referralCode = stateData.ref.toUpperCase();
+        console.log('[Auth] Processing referral code:', referralCode, 'for user:', profile.id);
+        
+        // Find the referrer
+        const referrerSql = `SELECT user_id, plan FROM user_profiles WHERE referral_code = $1`;
+        const { rows: referrerRows } = await query(referrerSql, [referralCode]);
+        
+        if (referrerRows.length > 0) {
+          const referrerUserId = referrerRows[0].user_id;
+          const currentPlan = referrerRows[0].plan;
+          
+          // Check if not self-referral and not already referred
+          if (referrerUserId !== profile.id) {
+            const existingSql = `SELECT id FROM referrals WHERE referrer_user_id = $1 AND referred_user_id = $2`;
+            const { rows: existingRows } = await query(existingSql, [referrerUserId, profile.id]);
+            
+            if (existingRows.length === 0) {
+              // Create referral record
+              const insertSql = `
+                INSERT INTO referrals (referrer_user_id, referred_user_id, referral_code, status, completed_at)
+                VALUES ($1, $2, $3, 'completed', NOW())
+              `;
+              await query(insertSql, [referrerUserId, profile.id, referralCode]);
+              console.log('[Auth] Referral tracked successfully for referrer:', referrerUserId);
+              
+              // Check if referrer should be upgraded
+              const countSql = `SELECT COUNT(*) as count FROM referrals WHERE referrer_user_id = $1 AND status = 'completed'`;
+              const { rows: countRows } = await query(countSql, [referrerUserId]);
+              const completedReferrals = parseInt(countRows[0].count);
+              
+              if (completedReferrals >= 3 && currentPlan !== 'Premium Plus Tier') {
+                const upgradeSql = `UPDATE user_profiles SET plan = 'Premium Plus Tier', updated_at = NOW() WHERE user_id = $1`;
+                await query(upgradeSql, [referrerUserId]);
+                console.log('[Auth] Referrer upgraded to Premium Plus! Total referrals:', completedReferrals);
+              } else {
+                console.log('[Auth] Referrer progress:', completedReferrals, '/ 3 referrals');
+              }
+            } else {
+              console.log('[Auth] User already referred by this code');
+            }
+          } else {
+            console.log('[Auth] Self-referral attempt blocked');
+          }
+        } else {
+          console.log('[Auth] Invalid referral code:', referralCode);
+        }
+      } catch (refError) {
+        console.error('[Auth] Referral tracking error (non-fatal):', refError?.message || refError);
+      }
+    }
+
     // Generate JWT token
     const jwtToken = generateToken(userData);
 
