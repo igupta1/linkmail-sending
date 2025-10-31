@@ -489,7 +489,7 @@ router.post('/contacted', [
  */
 router.get('/apollo-usage', async (req, res) => {
   const userId = req.user.id;
-  const APOLLO_USAGE_LIMIT = 50;
+  const APOLLO_USAGE_LIMIT = 25;
   
   try {
     const sql = `
@@ -506,6 +506,8 @@ router.get('/apollo-usage', async (req, res) => {
     
     return res.json({
       success: true,
+      // Frontend expects `current`; keep `currentUsage` for backward compatibility
+      current: currentUsage,
       currentUsage,
       limit: APOLLO_USAGE_LIMIT,
       remaining: Math.max(0, APOLLO_USAGE_LIMIT - currentUsage),

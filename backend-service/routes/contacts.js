@@ -778,7 +778,7 @@ router.post('/apollo-email-search', [
 
   // Check user's Apollo API usage limit
   const userId = req.user.id;
-  const APOLLO_USAGE_LIMIT = 50;
+  const APOLLO_USAGE_LIMIT = 25;
 
   try {
     // Get current Apollo API usage count
