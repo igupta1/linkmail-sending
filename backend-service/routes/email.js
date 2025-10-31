@@ -334,24 +334,32 @@ router.post('/send', [
       }
     });
 
-    // Find or create contact and connection
-    const contact = await findOrCreateContactByEmail(to, contactInfo);
-    const connection = await findOrCreateConnection(userId, contact.id, subject, contactInfo?.profilePictureUrl);
-    
-    // Create message object for the connection
-    const message = {
-      direction: 'sent',
-      subject,
-      body,
-      attachments: processedAttachments.map(a => ({ name: a.name, size: a.size, type: a.type })),
-      sent_at: new Date().toISOString(),
-      gmail_message_id: sendResponse.data.id,
-      gmail_thread_id: sendResponse.data.threadId,
-      is_follow_up: false
-    };
-    
-    // Add message to connection
-    await addMessageToConnection(userId, contact.id, message);
+    // Find or create contact and connection (non-blocking - if this fails, email was still sent)
+    let contactId = null;
+    try {
+      const contact = await findOrCreateContactByEmail(to, contactInfo);
+      contactId = contact.id;
+      
+      const connection = await findOrCreateConnection(userId, contact.id, subject, contactInfo?.profilePictureUrl);
+      
+      // Create message object for the connection
+      const message = {
+        direction: 'sent',
+        subject,
+        body,
+        attachments: processedAttachments.map(a => ({ name: a.name, size: a.size, type: a.type })),
+        sent_at: new Date().toISOString(),
+        gmail_message_id: sendResponse.data.id,
+        gmail_thread_id: sendResponse.data.threadId,
+        is_follow_up: false
+      };
+      
+      // Add message to connection
+      await addMessageToConnection(userId, contact.id, message);
+    } catch (contactError) {
+      console.error('Error creating contact/connection (email was sent successfully):', contactError);
+      // Don't fail the request - email was sent successfully
+    }
 
     // Save email to user's history (keeping existing functionality)
     if (!userSession.emailHistory) {
@@ -367,8 +375,8 @@ router.post('/send', [
       attachments: processedAttachments.map(a => ({ name: a.name, size: a.size, type: a.type })),
       sentAt: new Date().toISOString(),
       gmailMessageId: sendResponse.data.id,
-      contactId: contact.id,
-      connectionId: `${userId}_${contact.id}`
+      contactId: contactId,
+      connectionId: contactId ? `${userId}_${contactId}` : null
     };
 
     userSession.emailHistory.push(emailRecord);
@@ -383,6 +391,11 @@ router.post('/send', [
 
   } catch (error) {
     console.error('Email sending error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     
     // Handle specific Gmail API errors
     if (error.code === 401) {
@@ -408,7 +421,8 @@ router.post('/send', [
 
     res.status(500).json({
       error: 'Email sending failed',
-      message: 'An error occurred while sending the email'
+      message: error.message || 'An error occurred while sending the email',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });

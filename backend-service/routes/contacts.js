@@ -778,17 +778,22 @@ router.post('/apollo-email-search', [
 
   // Check user's Apollo API usage limit
   const userId = req.user.id;
-  const APOLLO_USAGE_LIMIT = 25;
+  // Limit depends on plan: Premium Tier (25) vs Premium Plus Tier (50)
+  let APOLLO_USAGE_LIMIT = 25;
 
   try {
     // Get current Apollo API usage count
-    const userProfileSql = `SELECT apollo_api_calls FROM user_profiles WHERE user_id = $1`;
+    const userProfileSql = `SELECT apollo_api_calls, plan FROM user_profiles WHERE user_id = $1`;
     const { rows: userProfileRows } = await query(userProfileSql, [userId]);
     
     let currentUsage = 0;
     if (userProfileRows.length > 0 && userProfileRows[0].apollo_api_calls !== null) {
       currentUsage = userProfileRows[0].apollo_api_calls;
     }
+    const plan = userProfileRows.length > 0 && typeof userProfileRows[0].plan === 'string'
+      ? userProfileRows[0].plan
+      : 'Premium Tier';
+    APOLLO_USAGE_LIMIT = plan === 'Premium Plus Tier' ? 50 : 25;
 
     // Check if user has reached the limit
     if (currentUsage >= APOLLO_USAGE_LIMIT) {

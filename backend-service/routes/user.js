@@ -489,20 +489,26 @@ router.post('/contacted', [
  */
 router.get('/apollo-usage', async (req, res) => {
   const userId = req.user.id;
-  const APOLLO_USAGE_LIMIT = 25;
+  // Limit depends on plan: Premium Tier (25) vs Premium Plus Tier (50)
+  let APOLLO_USAGE_LIMIT = 25;
   
   try {
     const sql = `
-      SELECT apollo_api_calls
+      SELECT apollo_api_calls, plan
       FROM user_profiles
       WHERE user_id = $1
     `;
     const { rows } = await query(sql, [userId]);
     
     let currentUsage = 0;
-    if (rows.length > 0 && rows[0].apollo_api_calls !== null) {
-      currentUsage = rows[0].apollo_api_calls;
+    let plan = 'Premium Tier';
+    if (rows.length > 0) {
+      if (rows[0].apollo_api_calls !== null) currentUsage = rows[0].apollo_api_calls;
+      if (rows[0].plan && typeof rows[0].plan === 'string') plan = rows[0].plan;
     }
+
+    // Determine limit by plan
+    APOLLO_USAGE_LIMIT = plan === 'Premium Plus Tier' ? 50 : 25;
     
     return res.json({
       success: true,
