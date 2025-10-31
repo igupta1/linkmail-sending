@@ -119,9 +119,17 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code blocks):
     }
 
     // Handle string "null" values
-    const cleanedJobTitle = (cleaned.jobTitle === 'null' || cleaned.jobTitle === null) ? null : (cleaned.jobTitle || null);
+    let cleanedJobTitle = (cleaned.jobTitle === 'null' || cleaned.jobTitle === null) ? null : (cleaned.jobTitle || null);
     const cleanedCompany = (cleaned.company === 'null' || cleaned.company === null) ? null : (cleaned.company || null);
     const cleanedCategory = (cleaned.category === 'null' || cleaned.category === null) ? null : (cleaned.category || null);
+
+    // If the LLM was unsure and returned an ambiguous role like "Other", prefer showing only the workplace
+    if (cleanedJobTitle && typeof cleanedJobTitle === 'string') {
+      const lower = cleanedJobTitle.trim().toLowerCase();
+      if (lower === 'other' || lower === 'unknown' || lower === 'n/a' || lower === 'na') {
+        cleanedJobTitle = null;
+      }
+    }
 
     // Log the cleaning for debugging
     console.log('Contact data cleaned:', {
