@@ -45,11 +45,17 @@ router.get('/google', (req, res) => {
     'https://www.googleapis.com/auth/userinfo.profile'
   ];
 
+  // Encode source and referral code in state parameter
+  const stateData = {
+    source: req.query.source || 'web',
+    ref: req.query.ref || null
+  };
+
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
     prompt: 'consent',
-    state: req.query.source || 'web' // Track if request came from extension
+    state: JSON.stringify(stateData)
   });
 
   res.redirect(url);
@@ -64,6 +70,19 @@ router.get('/google/callback', async (req, res) => {
 
   if (!code) {
     return res.status(400).send('Authorization code missing');
+  }
+
+  // Parse state parameter to extract source and referral code
+  let stateData = { source: 'web', ref: null };
+  try {
+    if (state) {
+      stateData = typeof state === 'string' && state.startsWith('{') 
+        ? JSON.parse(state) 
+        : { source: state, ref: null };
+    }
+  } catch (e) {
+    console.error('Failed to parse state parameter:', e);
+    stateData = { source: state || 'web', ref: null };
   }
 
   try {
@@ -88,7 +107,8 @@ router.get('/google/callback', async (req, res) => {
       email: profile.email,
       name: profile.name,
       picture: profile.picture,
-      googleTokens: tokens
+      googleTokens: tokens,
+      pendingReferralCode: stateData.ref || null
     };
 
     // Store user session
@@ -123,7 +143,7 @@ router.get('/google/callback', async (req, res) => {
     const jwtToken = generateToken(userData);
 
     // If request came from extension, show success page with token
-    if (state === 'extension') {
+    if (stateData.source === 'extension') {
       // Set CSP to allow inline scripts for this page
       res.setHeader('Content-Security-Policy', "script-src 'self' 'unsafe-inline'; object-src 'self'; frame-ancestors 'none';");
       

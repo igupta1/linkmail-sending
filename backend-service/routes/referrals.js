@@ -69,7 +69,7 @@ router.get('/code', async (req, res) => {
     return res.json({
       success: true,
       referralCode,
-      referralLink: `https://linkmail-sending.vercel.app/install?ref=${referralCode}`,
+      referralLink: `https://linkmail.dev/install?ref=${referralCode}`,
       stats: {
         completed: parseInt(stats.completed_count),
         pending: parseInt(stats.pending_count),
