@@ -308,11 +308,12 @@ router.get('/google/callback', async (req, res) => {
             // Function to close the tab via extension
             function closeTab() {
               if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-                chrome.runtime.sendMessage({ action: 'closeCurrentTab' }, () => {
-                  // Fallback if extension doesn't respond
-                  setTimeout(() => {
+                chrome.runtime.sendMessage({ action: 'closeCurrentTab' }, (response) => {
+                  // Only redirect if there was an error (tab didn't close)
+                  if (chrome.runtime.lastError || !response) {
                     window.location.href = 'https://www.linkedin.com';
-                  }, 500);
+                  }
+                  // Otherwise, the tab will be closed by the extension
                 });
               } else {
                 // Fallback for non-extension context
