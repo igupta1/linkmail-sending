@@ -89,7 +89,7 @@
             <h1>Linkmail is Ready</h1>
             <p class="mt-6">You should now be able to use Linkmail to outreach on LinkedIn. Time to lock in!</p>
             <div class="mt-6" style="display:flex; justify-content:center; gap:8px;">
-              <button class="btn" onclick="window.close()">Close Tab</button>
+              <button class="btn" onclick="closeTab()">Close Tab</button>
             </div>
           </div>
           <script>
@@ -100,6 +100,21 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ token: '${jwtToken}', userData: ${JSON.stringify(userData)} })
             }).catch(() => {});
+            
+            // Function to close the tab via extension
+            function closeTab() {
+              if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                chrome.runtime.sendMessage({ action: 'closeCurrentTab' }, () => {
+                  // Fallback if extension doesn't respond
+                  setTimeout(() => {
+                    window.location.href = 'https://www.linkedin.com';
+                  }, 500);
+                });
+              } else {
+                // Fallback for non-extension context
+                window.location.href = 'https://www.linkedin.com';
+              }
+            }
           </script>
         </body>
         </html>
