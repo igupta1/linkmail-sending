@@ -1226,6 +1226,153 @@ router.get('/search-by-category', async (req, res) => {
 });
 
 /**
+ * GET /api/contacts/search-by-company
+ * Query: company, limit (optional, default 10)
+ * Returns contacts who work at the specified company
+ * Used for the "Get Referred" feature on LinkedIn Jobs pages
+ */
+router.get('/search-by-company', async (req, res) => {
+  // Prevent caching to ensure fresh results every time
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  
+  try {
+    const rawCompany = (req.query.company || '').toString();
+    const rawLimit = (req.query.limit || '10').toString();
+
+    const company = rawCompany.trim();
+    const limit = parseInt(rawLimit, 10);
+
+    if (!company) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: 'Company is required'
+      });
+    }
+
+    if (isNaN(limit) || limit < 1 || limit > 50) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: 'Limit must be a number between 1 and 50'
+      });
+    }
+
+    // Get user's contacted LinkedIn URLs to exclude from recommendations
+    const userId = req.user.id;
+    let contactedLinkedins = [];
+    try {
+      const userProfileSql = `SELECT contacted_linkedins FROM user_profiles WHERE user_id = $1`;
+      const userProfileRows = await query(userProfileSql, [userId]);
+      console.log(`[search-by-company] User profile query returned ${userProfileRows.rows.length} rows for user ${userId}`);
+      
+      if (userProfileRows.rows.length > 0) {
+        const rawContactedLinkedins = userProfileRows.rows[0].contacted_linkedins;
+        
+        if (rawContactedLinkedins && Array.isArray(rawContactedLinkedins) && rawContactedLinkedins.length > 0) {
+          // Create variants of each contacted URL (trailing slash + http/https)
+          const urlSet = new Set();
+          rawContactedLinkedins.forEach(url => {
+            const lower = url.toLowerCase();
+            urlSet.add(lower);
+            const withoutSlash = lower.replace(/\/+$/, '');
+            const withSlash = withoutSlash + '/';
+            urlSet.add(withoutSlash);
+            urlSet.add(withSlash);
+            if (lower.startsWith('https://')) {
+              const httpVersion = lower.replace('https://', 'http://');
+              urlSet.add(httpVersion);
+              urlSet.add(httpVersion.replace(/\/+$/, ''));
+              urlSet.add(httpVersion.replace(/\/+$/, '') + '/');
+            } else if (lower.startsWith('http://')) {
+              const httpsVersion = lower.replace('http://', 'https://');
+              urlSet.add(httpsVersion);
+              urlSet.add(httpsVersion.replace(/\/+$/, ''));
+              urlSet.add(httpsVersion.replace(/\/+$/, '') + '/');
+            }
+          });
+          contactedLinkedins = Array.from(urlSet);
+        }
+      }
+    } catch (error) {
+      console.error('[search-by-company] Error fetching user contacted linkedins:', error);
+    }
+
+    console.log(`[search-by-company] Searching for company: "${company}" with limit ${limit}`);
+
+    // Build the SQL query with company matching
+    // Use ILIKE for case-insensitive partial matching
+    let companySql;
+    let companyParams;
+    
+    if (contactedLinkedins.length > 0) {
+      companySql = `
+        SELECT id,
+               first_name,
+               last_name,
+               job_title,
+               company,
+               category,
+               linkedin_url
+        FROM contacts
+        WHERE (LOWER(company) = LOWER($1) OR LOWER(company) LIKE LOWER($2))
+          AND linkedin_url IS NOT NULL
+          AND length(trim(linkedin_url)) > 0
+          AND LOWER(linkedin_url) <> ALL($3)
+        ORDER BY 
+          CASE WHEN LOWER(company) = LOWER($1) THEN 0 ELSE 1 END,
+          is_verified DESC,
+          updated_at DESC
+        LIMIT $4
+      `;
+      companyParams = [company, `%${company}%`, contactedLinkedins, limit];
+    } else {
+      companySql = `
+        SELECT id,
+               first_name,
+               last_name,
+               job_title,
+               company,
+               category,
+               linkedin_url
+        FROM contacts
+        WHERE (LOWER(company) = LOWER($1) OR LOWER(company) LIKE LOWER($2))
+          AND linkedin_url IS NOT NULL
+          AND length(trim(linkedin_url)) > 0
+        ORDER BY 
+          CASE WHEN LOWER(company) = LOWER($1) THEN 0 ELSE 1 END,
+          is_verified DESC,
+          updated_at DESC
+        LIMIT $3
+      `;
+      companyParams = [company, `%${company}%`, limit];
+    }
+
+    const companyRows = await query(companySql, companyParams);
+    
+    const results = companyRows.rows.map(r => ({
+      id: r.id,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      jobTitle: r.job_title,
+      company: r.company,
+      category: r.category || null,
+      linkedinUrl: r.linkedin_url || null
+    }));
+
+    console.log(`[search-by-company] Found ${results.length} contacts at company: "${company}"`);
+    return res.json({ 
+      results,
+      company: company,
+      totalFound: results.length
+    });
+  } catch (err) {
+    console.error('Search by company error:', err);
+    return res.status(500).json({ error: 'InternalError', message: 'Failed to search contacts by company' });
+  }
+});
+
+/**
  * GET /api/contacts/autocomplete
  * Query: type (jobTitle|company), q (search query)
  * Returns autocomplete suggestions for job titles or companies
