@@ -24,3 +24,4 @@ CREATE INDEX IF NOT EXISTS idx_scheduled_emails_pending_time ON scheduled_emails
 -- Index for querying user's scheduled emails
 CREATE INDEX IF NOT EXISTS idx_scheduled_emails_user ON scheduled_emails (user_id, status);
 
+
