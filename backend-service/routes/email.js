@@ -514,4 +514,193 @@ router.get('/profile', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/email/schedule
+ * Schedule an email to be sent at a later time
+ */
+router.post('/schedule', [
+  body('to').isEmail().withMessage('Valid recipient email is required'),
+  body('subject').notEmpty().withMessage('Subject is required'),
+  body('body').notEmpty().withMessage('Email body is required'),
+  body('scheduledAt').isISO8601().withMessage('Valid scheduled time is required'),
+  body('attachments').optional().isArray().withMessage('Attachments must be an array'),
+  body('contactInfo.firstName').optional().isString().trim(),
+  body('contactInfo.lastName').optional().isString().trim(),
+  body('contactInfo.jobTitle').optional().isString().trim(),
+  body('contactInfo.company').optional().isString().trim(),
+  body('contactInfo.linkedinUrl').optional().isString().trim()
+], async (req, res) => {
+  // Validate request
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      error: 'Validation failed',
+      details: errors.array()
+    });
+  }
+
+  const { to, subject, body, scheduledAt, attachments = [], contactInfo = {} } = req.body;
+  const userId = req.user.id;
+
+  try {
+    // Validate scheduled time is in the future
+    const scheduledDate = new Date(scheduledAt);
+    const now = new Date();
+    
+    if (scheduledDate <= now) {
+      return res.status(400).json({
+        error: 'Invalid scheduled time',
+        message: 'Scheduled time must be in the future'
+      });
+    }
+
+    // Get user session
+    const userSession = await getUserSession(userId);
+    if (!userSession) {
+      return res.status(401).json({
+        error: 'Session not found',
+        message: 'Please sign in again'
+      });
+    }
+
+    // Process attachments if any (fetch from URLs)
+    const processedAttachments = [];
+    if (attachments && attachments.length > 0) {
+      console.log(`Processing ${attachments.length} attachments for scheduled email...`);
+      
+      for (const attachment of attachments) {
+        try {
+          if (attachment.url && !attachment.data) {
+            console.log(`Fetching attachment from URL: ${attachment.url}`);
+            const fileData = await fetchFileFromUrl(attachment.url);
+            processedAttachments.push(fileData);
+            console.log(`Successfully fetched: ${fileData.name} (${fileData.size} bytes)`);
+          } else if (attachment.data) {
+            processedAttachments.push({
+              data: attachment.data,
+              name: attachment.name,
+              type: attachment.type || 'application/octet-stream',
+              size: attachment.size || 0
+            });
+          }
+        } catch (error) {
+          console.error(`Failed to process attachment:`, error);
+        }
+      }
+    }
+
+    // Store the scheduled email in the database
+    const insertScheduledEmailSql = `
+      INSERT INTO scheduled_emails (user_id, recipient_email, subject, body, scheduled_at, attachments, contact_info, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+      RETURNING *
+    `;
+
+    const { rows } = await query(insertScheduledEmailSql, [
+      userId,
+      to,
+      subject,
+      body,
+      scheduledDate.toISOString(),
+      JSON.stringify(processedAttachments.map(a => ({ name: a.name, size: a.size, type: a.type, url: a.url, data: a.data }))),
+      JSON.stringify(contactInfo)
+    ]);
+
+    const scheduledEmail = rows[0];
+
+    console.log(`Email scheduled successfully for ${scheduledDate.toISOString()}`);
+
+    res.json({
+      success: true,
+      scheduledId: scheduledEmail.id,
+      scheduledAt: scheduledEmail.scheduled_at,
+      message: 'Email scheduled successfully'
+    });
+
+  } catch (error) {
+    console.error('Email scheduling error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
+
+    res.status(500).json({
+      error: 'Email scheduling failed',
+      message: error.message || 'An error occurred while scheduling the email',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+/**
+ * GET /api/email/scheduled
+ * Get user's scheduled emails
+ */
+router.get('/scheduled', async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const selectScheduledSql = `
+      SELECT id, recipient_email, subject, scheduled_at, status, created_at
+      FROM scheduled_emails
+      WHERE user_id = $1
+      ORDER BY scheduled_at ASC
+    `;
+
+    const { rows } = await query(selectScheduledSql, [userId]);
+
+    res.json({
+      success: true,
+      scheduledEmails: rows,
+      total: rows.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching scheduled emails:', error);
+    res.status(500).json({
+      error: 'Failed to fetch scheduled emails',
+      message: 'An error occurred while retrieving your scheduled emails'
+    });
+  }
+});
+
+/**
+ * DELETE /api/email/scheduled/:id
+ * Cancel a scheduled email
+ */
+router.delete('/scheduled/:id', async (req, res) => {
+  const userId = req.user.id;
+  const scheduledId = req.params.id;
+
+  try {
+    const deleteScheduledSql = `
+      DELETE FROM scheduled_emails
+      WHERE id = $1 AND user_id = $2 AND status = 'pending'
+      RETURNING *
+    `;
+
+    const { rows } = await query(deleteScheduledSql, [scheduledId, userId]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        error: 'Scheduled email not found',
+        message: 'The scheduled email was not found or has already been sent'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Scheduled email cancelled successfully'
+    });
+
+  } catch (error) {
+    console.error('Error cancelling scheduled email:', error);
+    res.status(500).json({
+      error: 'Failed to cancel scheduled email',
+      message: 'An error occurred while cancelling the scheduled email'
+    });
+  }
+});
+
 module.exports = router;
