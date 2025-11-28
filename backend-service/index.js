@@ -96,7 +96,9 @@ app.get('/health', (req, res) => {
 });
 
 // Cron job endpoint for processing scheduled emails (no auth required, uses secret)
+// Supports both GET (Vercel cron) and POST (manual trigger)
 const { processScheduledEmails } = require('./routes/email-cron');
+app.get('/api/email/process-scheduled', processScheduledEmails);
 app.post('/api/email/process-scheduled', processScheduledEmails);
 
 // API routes

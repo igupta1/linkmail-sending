@@ -152,23 +152,37 @@ async function findOrCreateContactByEmail(email, contactInfo = {}) {
  * Process scheduled emails - called by Vercel cron
  */
 async function processScheduledEmails(req, res) {
+  console.log('[process-scheduled] Cron endpoint called');
+  console.log('[process-scheduled] Method:', req.method);
+  console.log('[process-scheduled] Headers:', JSON.stringify({
+    authorization: req.headers['authorization'] ? 'Bearer ***' : 'none',
+    'x-cron-secret': req.headers['x-cron-secret'] ? '***' : 'none',
+    'x-vercel-cron': req.headers['x-vercel-cron'] || 'none'
+  }));
+  
   // Verify cron secret to prevent unauthorized access
   const cronSecret = req.headers['x-cron-secret'] || req.query.secret;
   const expectedSecret = process.env.CRON_SECRET;
   
   // Also allow Vercel's cron authorization header
   const vercelCronHeader = req.headers['authorization'];
-  const isVercelCron = vercelCronHeader === `Bearer ${process.env.CRON_SECRET}`;
+  const isVercelCron = vercelCronHeader === `Bearer ${expectedSecret}`;
+  
+  // Vercel also sends x-vercel-cron header for cron requests
+  const isVercelCronHeader = req.headers['x-vercel-cron'] === '1';
   
   if (!expectedSecret) {
     console.error('[process-scheduled] CRON_SECRET environment variable not set');
     return res.status(500).json({ error: 'Server configuration error' });
   }
   
-  if (cronSecret !== expectedSecret && !isVercelCron) {
-    console.error('[process-scheduled] Invalid cron secret');
+  // Allow if: query secret matches, OR Authorization header matches, OR it's a Vercel cron request
+  if (cronSecret !== expectedSecret && !isVercelCron && !isVercelCronHeader) {
+    console.error('[process-scheduled] Invalid cron secret. Query secret match:', cronSecret === expectedSecret, ', Auth header match:', isVercelCron, ', Vercel cron header:', isVercelCronHeader);
     return res.status(401).json({ error: 'Unauthorized' });
   }
+  
+  console.log('[process-scheduled] Authorization successful');
 
   console.log('[process-scheduled] Starting to process scheduled emails...');
   

@@ -17,8 +17,8 @@
   },
   "crons": [
     {
-      "path": "/api/email/process-scheduled?secret=${CRON_SECRET}",
-      "schedule": "15 17 * * *"
+      "path": "/api/email/process-scheduled",
+      "schedule": "22 17 * * *"
     }
   ]
 }
