@@ -1301,7 +1301,7 @@ router.get('/search-by-company', async (req, res) => {
     console.log(`[search-by-company] Searching for company: "${company}" with limit ${limit}`);
 
     // Build the SQL query with company matching
-    // Use ILIKE for case-insensitive partial matching
+    // Use exact case-insensitive matching only (no substring matching)
     let companySql;
     let companyParams;
     
@@ -1315,17 +1315,16 @@ router.get('/search-by-company', async (req, res) => {
                category,
                linkedin_url
         FROM contacts
-        WHERE (LOWER(company) = LOWER($1) OR LOWER(company) LIKE LOWER($2))
+        WHERE LOWER(company) = LOWER($1)
           AND linkedin_url IS NOT NULL
           AND length(trim(linkedin_url)) > 0
-          AND LOWER(linkedin_url) <> ALL($3)
+          AND LOWER(linkedin_url) <> ALL($2)
         ORDER BY 
-          CASE WHEN LOWER(company) = LOWER($1) THEN 0 ELSE 1 END,
           is_verified DESC,
           updated_at DESC
-        LIMIT $4
+        LIMIT $3
       `;
-      companyParams = [company, `%${company}%`, contactedLinkedins, limit];
+      companyParams = [company, contactedLinkedins, limit];
     } else {
       companySql = `
         SELECT id,
@@ -1336,16 +1335,15 @@ router.get('/search-by-company', async (req, res) => {
                category,
                linkedin_url
         FROM contacts
-        WHERE (LOWER(company) = LOWER($1) OR LOWER(company) LIKE LOWER($2))
+        WHERE LOWER(company) = LOWER($1)
           AND linkedin_url IS NOT NULL
           AND length(trim(linkedin_url)) > 0
         ORDER BY 
-          CASE WHEN LOWER(company) = LOWER($1) THEN 0 ELSE 1 END,
           is_verified DESC,
           updated_at DESC
-        LIMIT $3
+        LIMIT $2
       `;
-      companyParams = [company, `%${company}%`, limit];
+      companyParams = [company, limit];
     }
 
     const companyRows = await query(companySql, companyParams);
