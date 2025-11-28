@@ -703,4 +703,101 @@ router.delete('/scheduled/:id', async (req, res) => {
   }
 });
 
+/**
+ * PUT /api/email/scheduled/:id
+ * Update a scheduled email (only pending emails can be updated)
+ */
+router.put('/scheduled/:id', async (req, res) => {
+  const userId = req.user.id;
+  const scheduledId = req.params.id;
+  const { subject, body, scheduledAt } = req.body;
+
+  try {
+    // First check if the email exists and is pending
+    const checkSql = `
+      SELECT * FROM scheduled_emails
+      WHERE id = $1 AND user_id = $2 AND status = 'pending'
+    `;
+    const { rows: existing } = await query(checkSql, [scheduledId, userId]);
+
+    if (existing.length === 0) {
+      return res.status(404).json({
+        error: 'Scheduled email not found',
+        message: 'The scheduled email was not found or has already been sent'
+      });
+    }
+
+    // Build the update query dynamically based on provided fields
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (subject !== undefined) {
+      updates.push(`subject = $${paramIndex++}`);
+      values.push(subject);
+    }
+
+    if (body !== undefined) {
+      updates.push(`body = $${paramIndex++}`);
+      values.push(body);
+    }
+
+    if (scheduledAt !== undefined) {
+      const scheduledDate = new Date(scheduledAt);
+      const now = new Date();
+      
+      if (scheduledDate <= now) {
+        return res.status(400).json({
+          error: 'Invalid scheduled time',
+          message: 'Scheduled time must be in the future'
+        });
+      }
+      
+      updates.push(`scheduled_at = $${paramIndex++}`);
+      values.push(scheduledDate.toISOString());
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        error: 'No updates provided',
+        message: 'Please provide at least one field to update (subject, body, or scheduledAt)'
+      });
+    }
+
+    updates.push(`updated_at = NOW()`);
+
+    // Add the WHERE clause parameters
+    values.push(scheduledId, userId);
+
+    const updateSql = `
+      UPDATE scheduled_emails
+      SET ${updates.join(', ')}
+      WHERE id = $${paramIndex++} AND user_id = $${paramIndex} AND status = 'pending'
+      RETURNING id, recipient_email, subject, body, scheduled_at, status, created_at, updated_at
+    `;
+
+    const { rows } = await query(updateSql, values);
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        error: 'Update failed',
+        message: 'Failed to update the scheduled email'
+      });
+    }
+
+    res.json({
+      success: true,
+      scheduledEmail: rows[0],
+      message: 'Scheduled email updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Error updating scheduled email:', error);
+    res.status(500).json({
+      error: 'Failed to update scheduled email',
+      message: 'An error occurred while updating the scheduled email'
+    });
+  }
+});
+
 module.exports = router;
