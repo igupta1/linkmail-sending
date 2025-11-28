@@ -642,7 +642,7 @@ router.get('/scheduled', async (req, res) => {
 
   try {
     const selectScheduledSql = `
-      SELECT id, recipient_email, subject, scheduled_at, status, created_at
+      SELECT id, recipient_email, subject, body, scheduled_at, status, created_at
       FROM scheduled_emails
       WHERE user_id = $1
       ORDER BY scheduled_at ASC
