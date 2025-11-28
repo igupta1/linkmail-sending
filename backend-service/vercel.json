@@ -14,5 +14,11 @@
   ],
   "env": {
     "NODE_ENV": "production"
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/email/process-scheduled?secret=${CRON_SECRET}",
+      "schedule": "* * * * *"
+    }
+  ]
 }

@@ -95,6 +95,10 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Cron job endpoint for processing scheduled emails (no auth required, uses secret)
+const { processScheduledEmails } = require('./routes/email-cron');
+app.post('/api/email/process-scheduled', processScheduledEmails);
+
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/email', authenticateToken, emailRoutes);
