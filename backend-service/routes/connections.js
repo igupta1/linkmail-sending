@@ -220,7 +220,7 @@ router.get('/:contactId', [
  */
 router.put('/:contactId/status', [
   param('contactId').isInt().withMessage('Contact ID must be a valid integer'),
-  body('status').isIn(['active', 'closed', 'follow_up_needed', 'responded', 'meeting_scheduled', 'converted'])
+  body('status').isIn(['active', 'closed', 'follow_up_needed', 'follow_up_sent', 'responded', 'meeting_scheduled', 'converted'])
     .withMessage('Invalid status')
 ], async (req, res) => {
   const errors = validationResult(req);
